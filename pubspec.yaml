@@ -28,6 +28,13 @@ dependencies:
   shared_preferences: ^2.2.3
   path_provider: ^2.1.3
 
+  # Internet
+  connectivity_plus: ^5.0.2
+
+  # GPS LOCATION (NEW)
+  geolocator: ^10.1.0
+  permission_handler: ^11.3.1
+
   # State management
   provider: ^6.1.2
 
@@ -44,7 +51,6 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^3.0.2
-
   flutter_launcher_icons: ^0.13.1
   hive_generator: ^2.0.1
   build_runner: ^2.4.13
@@ -57,9 +63,3 @@ flutter:
     - assets/models/coffee_rust_model.tflite
     - assets/icons/app_icon.png
     - .env
-
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: assets/icons/app_icon.png
-  min_sdk_android: 21

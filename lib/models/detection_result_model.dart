@@ -33,7 +33,7 @@ class DetectionResultModel extends HiveObject {
   @HiveField(6)
   double? diseaseConfidence;
 
-  /// Recommendation text from expert system
+  /// Recommendation text
   @HiveField(7)
   String? recommendation;
 
@@ -41,9 +41,17 @@ class DetectionResultModel extends HiveObject {
   @HiveField(8)
   DateTime createdAt;
 
-  /// Sync status (offline-first architecture)
+  /// Sync status
   @HiveField(9)
   bool isSynced;
+
+  /// 🌍 NEW: Latitude
+  @HiveField(10)
+  double? latitude;
+
+  /// 🌍 NEW: Longitude
+  @HiveField(11)
+  double? longitude;
 
   DetectionResultModel({
     required this.id,
@@ -56,5 +64,7 @@ class DetectionResultModel extends HiveObject {
     this.recommendation,
     required this.createdAt,
     this.isSynced = false,
+    this.latitude,
+    this.longitude,
   });
 }
