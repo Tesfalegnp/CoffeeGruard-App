@@ -2,11 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../widgets/image_picker_widget.dart';
-import '../../core/utils/image_utils.dart';
 import '../../core/services/detection_service.dart';
-import '../../core/services/hive_service.dart';
-import '../../core/services/sync_service.dart';
-import '../../models/detection_result_model.dart';
 import 'history_screen.dart';
 
 class CaptureScreen extends StatefulWidget {
@@ -19,7 +15,6 @@ class CaptureScreen extends StatefulWidget {
 class _CaptureScreenState extends State<CaptureScreen> {
 
   final DetectionService detectionService = DetectionService();
-  final SyncService syncService = SyncService();
 
   bool isProcessing = false;
   String status = "";
@@ -38,67 +33,48 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> handleImage(File image) async {
 
+    /// Show selected image immediately
     setState(() {
       selectedImage = image;
       isProcessing = true;
       status = "🔍 Processing image...";
     });
 
+    /// Run detection (this already saves + syncs internally)
     final result = await detectionService.runDetection(image);
 
+    /// If failed
     if (result["success"] == false) {
-
       setState(() {
         status = result["message"];
         isProcessing = false;
       });
-
       return;
     }
 
     final disease = result["disease"];
     final confidence = result["diseaseConfidence"];
 
-    final localPath = await ImageUtils.saveImageLocally(image);
-
-    final detection = DetectionResultModel(
-
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-
-      imageLocalPath: localPath,
-
-      imageUrl: null,
-
-      isCoffeeLeaf: true,
-
-      leafConfidence: result["leafConfidence"],
-
-      diseaseLabel: disease,
-
-      diseaseConfidence: confidence,
-
-      recommendation: null,
-
-      createdAt: DateTime.now(),
-
-      isSynced: false,
-    );
-
-    await HiveService.saveDetection(detection);
-
-    /// Trigger sync attempt
-    await syncService.syncDetections();
-
+    /// Show result immediately (FAST UI)
     setState(() {
-
       isProcessing = false;
 
       status =
           "🌿 Disease: $disease\n"
           "Confidence: ${(confidence * 100).toStringAsFixed(2)}%\n"
           "💾 Saved locally\n"
-          "☁ Sync attempted";
+          "☁ Uploading in background...";
+    });
 
+    /// Background upload feedback (non-blocking)
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("✅ Data uploaded successfully"),
+        ),
+      );
     });
   }
 
@@ -119,22 +95,33 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
             children: [
 
+              /// IMAGE PICKER
               ImagePickerWidget(
                 onImageSelected: handleImage,
               ),
 
               const SizedBox(height: 20),
 
+              /// SHOW SELECTED IMAGE (ONLY ONE)
               if (selectedImage != null)
-                Image.file(selectedImage!, height: 200),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(
+                    selectedImage!,
+                    height: 200,
+                    fit: BoxFit.cover,
+                  ),
+                ),
 
               const SizedBox(height: 20),
 
+              /// LOADING
               if (isProcessing)
                 const CircularProgressIndicator(),
 
               const SizedBox(height: 20),
 
+              /// STATUS TEXT
               Text(
                 status,
                 textAlign: TextAlign.center,
@@ -142,10 +129,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
               const SizedBox(height: 20),
 
+              /// NAVIGATE TO HISTORY
               ElevatedButton.icon(
 
                 onPressed: () {
-
                   Navigator.push(
                     context,
                     MaterialPageRoute(

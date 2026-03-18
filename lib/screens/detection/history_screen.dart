@@ -31,7 +31,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
   }
 
-  /// 🚀 MANUAL UPLOAD FUNCTION
+  /// 🚀 MANUAL UPLOAD
   Future<void> uploadAll() async {
 
     setState(() {
@@ -53,6 +53,78 @@ class _HistoryScreenState extends State<HistoryScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Upload finished")),
     );
+  }
+
+  /// ❗ CONFIRM DELETE SINGLE
+  Future<void> confirmDeleteItem(DetectionResultModel item) async {
+
+    if (item.isSynced != true) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete Item"),
+        content: const Text(
+            "Are you sure you want to delete this record?\n\nThis action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await item.delete();
+      loadDetections();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Deleted successfully")),
+      );
+    }
+  }
+
+  /// ❗ CONFIRM CLEAR ALL
+  Future<void> confirmClearAllSynced() async {
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Clear All Uploaded Data"),
+        content: const Text(
+            "Are you sure you want to delete ALL synced records?\n\nUnsynced data will be kept."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete All", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final syncedItems =
+          detections.where((e) => e.isSynced == true).toList();
+
+      for (var item in syncedItems) {
+        await item.delete();
+      }
+
+      loadDetections();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("All uploaded data cleared")),
+      );
+    }
   }
 
   void openDetail(DetectionResultModel item) {
@@ -97,7 +169,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               const SizedBox(height: 10),
 
               Text(
-                "Date: ${item.createdAt != null ? item.createdAt.toString().substring(0,16) : "Unknown"}",
+                "Date: ${item.createdAt != null
+                    ? item.createdAt.toString().substring(0,16)
+                    : "Unknown"}",
               ),
 
               const SizedBox(height: 10),
@@ -141,20 +215,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
 
+    final hasSynced =
+        detections.any((e) => e.isSynced == true);
+
     return Scaffold(
 
       appBar: AppBar(
         title: const Text("Detection History"),
 
-        /// 🚀 UPLOAD BUTTON
         actions: [
+
+          /// 🚀 UPLOAD
           IconButton(
             icon: isUploading
-                ? const CircularProgressIndicator(color: Colors.white)
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
                 : const Icon(Icons.cloud_upload),
 
             onPressed: isUploading ? null : uploadAll,
-          )
+          ),
+
+          /// 🧹 CLEAR ALL (WITH CONFIRM)
+          IconButton(
+            icon: const Icon(Icons.delete_sweep),
+            onPressed: hasSynced ? confirmClearAllSynced : null,
+          ),
         ],
       ),
 
@@ -214,13 +305,30 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ],
                     ),
 
-                    trailing: Icon(
-                      item.isSynced == true
-                          ? Icons.cloud_done
-                          : Icons.cloud_off,
-                      color: item.isSynced == true
-                          ? Colors.green
-                          : Colors.orange,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+
+                        Icon(
+                          item.isSynced == true
+                              ? Icons.cloud_done
+                              : Icons.cloud_off,
+                          color: item.isSynced == true
+                              ? Colors.green
+                              : Colors.orange,
+                        ),
+
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          color: item.isSynced == true
+                              ? Colors.red
+                              : Colors.grey,
+
+                          onPressed: item.isSynced == true
+                              ? () => confirmDeleteItem(item)
+                              : null,
+                        ),
+                      ],
                     ),
                   ),
                 );
