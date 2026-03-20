@@ -31,12 +31,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
   }
 
+  /// 📊 CALCULATE INSIGHTS (NEW 🔥)
+  int get total => detections.length;
+
+  int get healthy => detections
+      .where((d) =>
+          (d.diseaseLabel ?? "").toLowerCase().contains("healthy"))
+      .length;
+
+  int get diseased => total - healthy;
+
+  double get successRate =>
+      total == 0 ? 0 : (healthy / total) * 100;
+
   /// 🚀 MANUAL UPLOAD
   Future<void> uploadAll() async {
 
-    setState(() {
-      isUploading = true;
-    });
+    setState(() => isUploading = true);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Uploading detections...")),
@@ -46,16 +57,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     loadDetections();
 
-    setState(() {
-      isUploading = false;
-    });
+    setState(() => isUploading = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Upload finished")),
     );
   }
 
-  /// ❗ CONFIRM DELETE SINGLE
+  /// ❗ DELETE SINGLE
   Future<void> confirmDeleteItem(DetectionResultModel item) async {
 
     if (item.isSynced != true) return;
@@ -64,8 +73,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Delete Item"),
-        content: const Text(
-            "Are you sure you want to delete this record?\n\nThis action cannot be undone."),
+        content: const Text("This cannot be undone."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -84,20 +92,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
       loadDetections();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Deleted successfully")),
+        const SnackBar(content: Text("Deleted")),
       );
     }
   }
 
-  /// ❗ CONFIRM CLEAR ALL
+  /// ❗ CLEAR ALL SYNCED
   Future<void> confirmClearAllSynced() async {
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Clear All Uploaded Data"),
-        content: const Text(
-            "Are you sure you want to delete ALL synced records?\n\nUnsynced data will be kept."),
+        title: const Text("Clear Uploaded Data"),
+        content: const Text("Delete all synced records only."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -105,13 +112,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete All", style: TextStyle(color: Colors.red)),
+            child: const Text("Delete All",
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
+
       final syncedItems =
           detections.where((e) => e.isSynced == true).toList();
 
@@ -122,11 +131,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
       loadDetections();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All uploaded data cleared")),
+        const SnackBar(content: Text("Cleared")),
       );
     }
   }
 
+  /// 🔍 DETAIL VIEW
   void openDetail(DetectionResultModel item) {
 
     final confidence = item.diseaseConfidence ?? 0;
@@ -134,73 +144,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
     showDialog(
       context: context,
       builder: (_) {
-
         return AlertDialog(
-
           title: Text(item.diseaseLabel ?? "Detection"),
-
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
 
               if (item.imageLocalPath != null &&
-                  item.imageLocalPath!.isNotEmpty &&
                   File(item.imageLocalPath!).existsSync())
-                Image.file(
-                  File(item.imageLocalPath!),
-                  height: 200,
-                )
-              else
-                const Icon(Icons.image, size: 120),
+                Image.file(File(item.imageLocalPath!), height: 180),
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 10),
+
+              Text("Confidence: ${(confidence * 100).toStringAsFixed(1)}%"),
 
               Text(
-                "Disease: ${item.diseaseLabel ?? "Unknown"}",
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                item.createdAt?.toString().substring(0, 16) ?? "",
               ),
 
               const SizedBox(height: 10),
 
-              Text(
-                "Confidence: ${(confidence * 100).toStringAsFixed(2)} %",
-              ),
-
-              const SizedBox(height: 10),
-
-              Text(
-                "Date: ${item.createdAt != null
-                    ? item.createdAt.toString().substring(0,16)
-                    : "Unknown"}",
-              ),
-
-              const SizedBox(height: 10),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-
-                  Icon(
-                    item.isSynced == true
-                        ? Icons.cloud_done
-                        : Icons.cloud_off,
-                    color: item.isSynced == true
-                        ? Colors.green
-                        : Colors.orange,
-                  ),
-
-                  const SizedBox(width: 5),
-
-                  Text(
-                    item.isSynced == true
-                        ? "Synced"
-                        : "Not Synced",
-                  )
-                ],
+              Chip(
+                label: Text(
+                  item.isSynced == true ? "Synced" : "Offline",
+                ),
+                backgroundColor: item.isSynced == true
+                    ? Colors.green.shade100
+                    : Colors.orange.shade100,
               )
             ],
           ),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -209,6 +182,68 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ],
         );
       },
+    );
+  }
+
+  /// 📊 INSIGHT CARD (NEW 🔥)
+  Widget buildInsightCard() {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Colors.green, Colors.teal],
+        ),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        children: [
+
+          const Text(
+            "Farm Insights",
+            style: TextStyle(color: Colors.white, fontSize: 16),
+          ),
+
+          const SizedBox(height: 10),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _stat("Total", total),
+              _stat("Healthy", healthy),
+              _stat("Diseased", diseased),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          LinearProgressIndicator(
+            value: successRate / 100,
+            minHeight: 8,
+            backgroundColor: Colors.white24,
+          ),
+
+          const SizedBox(height: 5),
+
+          Text(
+            "Healthy Rate: ${successRate.toStringAsFixed(1)}%",
+            style: const TextStyle(color: Colors.white),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(String title, int value) {
+    return Column(
+      children: [
+        Text(
+          "$value",
+          style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold),
+        ),
+        Text(title, style: const TextStyle(color: Colors.white70))
+      ],
     );
   }
 
@@ -221,11 +256,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Scaffold(
 
       appBar: AppBar(
-        title: const Text("Detection History"),
-
+        title: const Text("History"),
+        backgroundColor: Colors.green.shade700,
         actions: [
 
-          /// 🚀 UPLOAD
           IconButton(
             icon: isUploading
                 ? const SizedBox(
@@ -237,11 +271,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   )
                 : const Icon(Icons.cloud_upload),
-
             onPressed: isUploading ? null : uploadAll,
           ),
 
-          /// 🧹 CLEAR ALL (WITH CONFIRM)
           IconButton(
             icon: const Icon(Icons.delete_sweep),
             onPressed: hasSynced ? confirmClearAllSynced : null,
@@ -249,91 +281,88 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
 
-      body: detections.isEmpty
-          ? const Center(child: Text("No detections yet"))
-          : ListView.builder(
+      body: RefreshIndicator(
+        onRefresh: () async => loadDetections(),
+        child: detections.isEmpty
+            ? const Center(
+                child: Text(
+                  "No detections yet 🌿",
+                  style: TextStyle(fontSize: 16),
+                ),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(15),
+                children: [
 
-              itemCount: detections.length,
+                  /// 📊 INSIGHT
+                  buildInsightCard(),
 
-              itemBuilder: (context, index) {
+                  const SizedBox(height: 15),
 
-                final item = detections[index];
-                final confidence = item.diseaseConfidence ?? 0;
+                  /// 📜 LIST
+                  ...detections.map((item) {
 
-                return Card(
+                    final confidence = item.diseaseConfidence ?? 0;
 
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    return Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
 
-                  child: ListTile(
+                        onTap: () => openDetail(item),
 
-                    onTap: () => openDetail(item),
+                        leading: item.imageLocalPath != null &&
+                                File(item.imageLocalPath!).existsSync()
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  File(item.imageLocalPath!),
+                                  width: 55,
+                                  height: 55,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : const Icon(Icons.image),
 
-                    leading: item.imageLocalPath != null &&
-                            item.imageLocalPath!.isNotEmpty &&
-                            File(item.imageLocalPath!).existsSync()
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: Image.file(
-                              File(item.imageLocalPath!),
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
+                        title: Text(
+                          item.diseaseLabel ?? "Unknown",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold),
+                        ),
+
+                        subtitle: Text(
+                          "${(confidence * 100).toStringAsFixed(1)}% • ${item.createdAt?.toString().substring(0, 16) ?? ""}",
+                        ),
+
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+
+                            Icon(
+                              item.isSynced == true
+                                  ? Icons.cloud_done
+                                  : Icons.cloud_off,
+                              color: item.isSynced == true
+                                  ? Colors.green
+                                  : Colors.orange,
                             ),
-                          )
-                        : const Icon(Icons.image),
 
-                    title: Text(
-                      item.diseaseLabel ?? "Unknown",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-
-                        Text(
-                          "Confidence: ${(confidence * 100).toStringAsFixed(2)} %",
+                            if (item.isSynced == true)
+                              GestureDetector(
+                                onTap: () =>
+                                    confirmDeleteItem(item),
+                                child: const Icon(Icons.delete,
+                                    size: 18, color: Colors.red),
+                              ),
+                          ],
                         ),
-
-                        Text(
-                          item.createdAt != null
-                              ? item.createdAt.toString().substring(0, 16)
-                              : "Unknown date",
-                          style: const TextStyle(fontSize: 12),
-                        )
-                      ],
-                    ),
-
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-
-                        Icon(
-                          item.isSynced == true
-                              ? Icons.cloud_done
-                              : Icons.cloud_off,
-                          color: item.isSynced == true
-                              ? Colors.green
-                              : Colors.orange,
-                        ),
-
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          color: item.isSynced == true
-                              ? Colors.red
-                              : Colors.grey,
-
-                          onPressed: item.isSynced == true
-                              ? () => confirmDeleteItem(item)
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                      ),
+                    );
+                  }).toList()
+                ],
+              ),
+      ),
     );
   }
 }
