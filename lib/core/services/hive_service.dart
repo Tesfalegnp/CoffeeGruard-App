@@ -40,7 +40,7 @@ class HiveService {
   }
 
   /// =========================
-  /// 📸 IMAGE STORAGE FIX (VERY IMPORTANT)
+  /// 📸 IMAGE STORAGE
   /// =========================
   static Future<String> saveImageToLocal(File image) async {
 
@@ -64,7 +64,7 @@ class HiveService {
     return Hive.box<DetectionResultModel>(detectionBox);
   }
 
-  /// ✅ SAVE + AUTO SYNC
+  /// ✅ SAVE + AUTO FULL SYNC (UPDATED 🔥)
   static Future<void> saveDetection(DetectionResultModel detection) async {
 
     try {
@@ -77,10 +77,10 @@ class HiveService {
 
       print("✅ Saved locally");
 
-      /// 🚀 AUTO SYNC (non-blocking)
+      /// 🚀 AUTO FULL SYNC (DETECTIONS + RECOMMENDATIONS)
       Future.microtask(() async {
-        print("🚀 Starting sync...");
-        await SyncService().syncDetections();
+        print("🚀 Starting FULL sync...");
+        await SyncService().fullSync();
       });
 
     } catch (e) {
@@ -99,14 +99,14 @@ class HiveService {
   }
 
   /// =========================
-  /// RECOMMENDATION METHODS
+  /// 💡 RECOMMENDATION METHODS (SMART MATCH)
   /// =========================
 
   static Box<RecommendationModel> getRecommendationBox() {
     return Hive.box<RecommendationModel>(recommendationBox);
   }
 
-  /// 📥 Save all recommendations (overwrite old)
+  /// 📥 Save all recommendations
   static Future<void> saveRecommendations(
       List<RecommendationModel> list) async {
 
@@ -120,7 +120,7 @@ class HiveService {
         await box.put(item.id, item);
       }
 
-      print("✅ Recommendations saved locally");
+      print("✅ Recommendations saved locally: ${list.length}");
 
     } catch (e) {
       print("❌ saveRecommendations error: $e");
@@ -132,7 +132,7 @@ class HiveService {
     return getRecommendationBox().values.toList();
   }
 
-  /// 🔍 Find recommendation by disease + severity
+  /// 🔍 SMART MATCH (VERY IMPORTANT 🔥)
   static RecommendationModel? getRecommendation(
       String disease, String severity) {
 
@@ -140,16 +140,49 @@ class HiveService {
 
     try {
 
-      return box.values.firstWhere(
-        (e) =>
-            e.diseaseLabel.toLowerCase().trim() ==
-                disease.toLowerCase().trim() &&
-            e.severity.toLowerCase().trim() ==
-                severity.toLowerCase().trim(),
-      );
+      final normalizedDisease =
+          disease.toLowerCase().replaceAll(" ", "").trim();
+
+      final normalizedSeverity =
+          severity.toLowerCase().trim();
+
+      /// 1️⃣ Try EXACT match
+      try {
+        return box.values.firstWhere(
+          (e) =>
+              e.diseaseLabel.toLowerCase().replaceAll(" ", "") ==
+                  normalizedDisease &&
+              e.severity.toLowerCase() == normalizedSeverity,
+        );
+      } catch (_) {}
+
+      /// 2️⃣ Try CONTAINS match
+      try {
+        return box.values.firstWhere(
+          (e) =>
+              normalizedDisease.contains(
+                  e.diseaseLabel.toLowerCase().replaceAll(" ", "")) ||
+              e.diseaseLabel
+                  .toLowerCase()
+                  .replaceAll(" ", "")
+                  .contains(normalizedDisease),
+        );
+      } catch (_) {}
+
+      /// 3️⃣ Fallback (ignore severity)
+      try {
+        return box.values.firstWhere(
+          (e) =>
+              normalizedDisease.contains(
+                  e.diseaseLabel.toLowerCase().replaceAll(" ", "")),
+        );
+      } catch (_) {}
+
+      print("⚠️ No local recommendation found (after all strategies)");
+      return null;
 
     } catch (e) {
-      print("⚠️ No local recommendation found");
+      print("❌ getRecommendation error: $e");
       return null;
     }
   }

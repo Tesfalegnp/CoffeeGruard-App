@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../ml/coffee_detector.dart';
 import '../../models/detection_result_model.dart';
+import '../../models/recommendation_model.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
 
@@ -38,7 +39,7 @@ class DetectionService {
         };
       }
 
-      /// ✅ Normalize disease text (IMPORTANT)
+      /// ✅ Normalize disease text
       final diseaseRaw = result["disease"];
       final disease = diseaseRaw.toString().trim();
 
@@ -48,27 +49,50 @@ class DetectionService {
       print("✅ Coffee leaf detected");
       print("🦠 Disease: $disease ($confidence)");
 
-      /// ✅ FETCH RECOMMENDATION FROM SUPABASE
+      /// =====================================================
+      /// 🧠 OFFLINE-FIRST RECOMMENDATION LOGIC
+      /// =====================================================
+
       String recommendationText = "No recommendation available";
 
-      try {
-        final rec =
-            await _supabaseService.getRecommendationByDisease(disease);
+      /// ⚠️ TEMP: default severity
+      String severity = "medium";
 
-        if (rec != null && rec["content"] != null) {
-          recommendationText = rec["content"];
+      try {
+        /// 1️⃣ Try LOCAL (Hive) FIRST
+        final RecommendationModel? localRec =
+            HiveService.getRecommendation(disease, severity);
+
+        if (localRec != null) {
+          print("📦 Using LOCAL recommendation");
+
+          recommendationText = localRec.content;
+        } else {
+          print("🌐 No local recommendation, fetching ONLINE...");
+
+          /// 2️⃣ FALLBACK → SUPABASE
+          final rec =
+              await _supabaseService.getRecommendationByDisease(disease);
+
+          if (rec != null && rec["content"] != null) {
+            recommendationText = rec["content"];
+          }
         }
       } catch (e) {
-        print("⚠️ Recommendation fetch failed: $e");
+        print("⚠️ Recommendation error: $e");
       }
 
-      /// ✅ FIX: SAVE IMAGE TO PERMANENT STORAGE
+      /// =====================================================
+      /// 💾 SAVE IMAGE LOCALLY
+      /// =====================================================
       final savedPath = await HiveService.saveImageToLocal(image);
 
-      /// ✅ CREATE LOCAL OBJECT
+      /// =====================================================
+      /// 📦 CREATE DETECTION OBJECT
+      /// =====================================================
       final detection = DetectionResultModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        imageLocalPath: savedPath, // ✅ FIXED
+        imageLocalPath: savedPath,
         isCoffeeLeaf: true,
         leafConfidence: 1.0,
         diseaseLabel: disease,
@@ -78,7 +102,9 @@ class DetectionService {
         isSynced: false,
       );
 
-      /// 💾 SAVE LOCAL
+      /// =====================================================
+      /// 💾 SAVE TO HIVE + AUTO SYNC
+      /// =====================================================
       print("💾 Saving detection...");
       await HiveService.saveDetection(detection);
 

@@ -2,12 +2,30 @@ import 'dart:io';
 
 import 'hive_service.dart';
 import 'supabase_service.dart';
+import 'recommendation_service.dart'; // ✅ NEW
 import '../../models/detection_result_model.dart';
 
 class SyncService {
 
   final SupabaseService supabaseService = SupabaseService();
+  final RecommendationService recommendationService = RecommendationService(); // ✅ NEW
 
+  /// =====================================================
+  /// 🚀 FULL SYNC (NEW)
+  /// =====================================================
+  Future<void> fullSync() async {
+
+    print("🔄 FULL SYNC STARTED");
+
+    await syncDetections();        // existing
+    await syncRecommendations();   // new
+
+    print("✅ FULL SYNC COMPLETED");
+  }
+
+  /// =====================================================
+  /// 📡 SYNC DETECTIONS (UNCHANGED)
+  /// =====================================================
   Future<void> syncDetections() async {
 
     print("🔥 SYNC FUNCTION STARTED");
@@ -61,21 +79,13 @@ class SyncService {
         final record = {
 
           "user_id": null,
-
           "image_url": imageUrl,
-
           "image_local_path": detection.imageLocalPath,
-
           "is_coffee_leaf": detection.isCoffeeLeaf,
-
           "leaf_confidence": detection.leafConfidence,
-
           "disease_label": detection.diseaseLabel,
-
           "disease_confidence": detection.diseaseConfidence,
-
           "recommendation_text": detection.recommendation,
-
           "created_at":
               detection.createdAt?.toIso8601String() ??
               DateTime.now().toIso8601String()
@@ -99,10 +109,25 @@ class SyncService {
         }
 
       } catch (e) {
-
         print("🔥 Sync error: $e");
-
       }
+    }
+  }
+
+  /// =====================================================
+  /// 💡 SYNC RECOMMENDATIONS (NEW 🔥)
+  /// =====================================================
+  Future<void> syncRecommendations() async {
+
+    try {
+      print("📥 Syncing recommendations...");
+
+      await recommendationService.syncRecommendations();
+
+      print("✅ Recommendations updated");
+
+    } catch (e) {
+      print("❌ Recommendation sync error: $e");
     }
   }
 }
