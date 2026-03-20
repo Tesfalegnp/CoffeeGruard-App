@@ -4,7 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/supabase_config.dart';
 import 'core/services/hive_service.dart';
-import 'screens/detection/capture_screen.dart';
+import 'core/services/recommendation_service.dart';
+import 'screens/home/hero_home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,14 @@ Future<void> main() async {
   // Initialize Hive (offline storage)
   await HiveService.init();
 
+  // 🔄 Sync recommendations from Supabase → Hive
+  try {
+    await RecommendationService().syncRecommendations();
+    debugPrint("✅ Recommendations synced successfully");
+  } catch (e) {
+    debugPrint("⚠️ Recommendation sync failed: $e");
+  }
+
   runApp(const CoffeeGuardApp());
 }
 
@@ -35,7 +44,7 @@ class CoffeeGuardApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.green,
       ),
-      home: const CaptureScreen(),
+      home: const HeroHomeScreen(),
     );
   }
 }

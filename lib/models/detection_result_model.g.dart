@@ -27,13 +27,15 @@ class DetectionResultModelAdapter extends TypeAdapter<DetectionResultModel> {
       recommendation: fields[7] as String?,
       createdAt: fields[8] as DateTime,
       isSynced: fields[9] as bool,
+      latitude: fields[10] as double?,
+      longitude: fields[11] as double?,
     );
   }
 
   @override
   void write(BinaryWriter writer, DetectionResultModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +55,11 @@ class DetectionResultModelAdapter extends TypeAdapter<DetectionResultModel> {
       ..writeByte(8)
       ..write(obj.createdAt)
       ..writeByte(9)
-      ..write(obj.isSynced);
+      ..write(obj.isSynced)
+      ..writeByte(10)
+      ..write(obj.latitude)
+      ..writeByte(11)
+      ..write(obj.longitude);
   }
 
   @override

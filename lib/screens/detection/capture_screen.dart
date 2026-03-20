@@ -6,6 +6,7 @@ import '../../widgets/image_picker_widget.dart';
 import '../../core/services/detection_service.dart';
 import '../../core/services/sync_service.dart';
 import 'history_screen.dart';
+import 'result_screen.dart';
 
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key});
@@ -41,6 +42,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     final result = await detectionService.runDetection(image);
 
+    /// ❌ Detection failed
     if (result["success"] == false) {
       setState(() {
         status = result["message"];
@@ -49,10 +51,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
       return;
     }
 
+    /// ✅ Extract results
     final disease = result["disease"];
     final confidence = result["diseaseConfidence"];
+    final recommendation =
+        result["recommendation"] ?? "No recommendation available";
 
-    /// ✅ POPUP: Saved locally
+    /// 💾 Saved locally
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -62,7 +67,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       );
     }
 
-    /// ✅ CHECK INTERNET
+    /// 🌐 Check internet
     final connectivityResult = await Connectivity().checkConnectivity();
 
     if (connectivityResult == ConnectivityResult.none) {
@@ -71,7 +76,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("⚠️ No internet. Connect Wi-Fi to upload."),
+            content: Text("⚠️ No internet. Will sync later."),
             duration: Duration(seconds: 3),
           ),
         );
@@ -79,7 +84,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     } else {
 
-      /// ✅ Internet → sync
+      /// ☁ Upload in background
       syncService.syncDetections().then((_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -94,11 +99,23 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
     setState(() {
       isProcessing = false;
-
-      status =
-          "🌿 Disease: $disease\n"
-          "Confidence: ${(confidence * 100).toStringAsFixed(2)}%";
+      status = "";
     });
+
+    /// 🚀 Navigate to Result Screen
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ResultScreen(
+            image: image,
+            disease: disease,
+            confidence: confidence,
+            recommendation: recommendation,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -118,7 +135,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
             children: [
 
-              /// 📸 Image Picker (ONLY image display here)
+              /// 📸 Image Picker
               ImagePickerWidget(
                 onImageSelected: handleImage,
               ),
@@ -127,19 +144,26 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
               /// ⏳ Loading
               if (isProcessing)
-                const CircularProgressIndicator(),
+                Column(
+                  children: const [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 10),
+                    Text("Processing... please wait"),
+                  ],
+                ),
 
               const SizedBox(height: 20),
 
-              /// 🧾 Result
-              Text(
-                status,
-                textAlign: TextAlign.center,
-              ),
+              /// 🧾 Status
+              if (status.isNotEmpty)
+                Text(
+                  status,
+                  textAlign: TextAlign.center,
+                ),
 
               const SizedBox(height: 20),
 
-              /// 📂 History
+              /// 📂 History Button
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
