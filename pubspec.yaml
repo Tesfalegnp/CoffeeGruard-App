@@ -16,7 +16,7 @@ dependencies:
   # Backend
   supabase_flutter: ^2.8.0
   flutter_dotenv: ^5.2.1
-
+  flutter_tts: ^3.8.5
   # Image + AI
   image_picker: ^1.2.1
   tflite_flutter: ^0.12.1
