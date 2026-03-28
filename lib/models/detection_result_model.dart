@@ -45,13 +45,29 @@ class DetectionResultModel extends HiveObject {
   @HiveField(9)
   bool isSynced;
 
-  /// 🌍 NEW: Latitude
+  /// 🌍 Latitude
   @HiveField(10)
   double? latitude;
 
-  /// 🌍 NEW: Longitude
+  /// 🌍 Longitude
   @HiveField(11)
   double? longitude;
+
+  // ===============================
+  // 🆕 NEW FIELDS (EXPERT SYSTEM)
+  // ===============================
+
+  /// 👨‍🌾 Reviewed by expert or not
+  @HiveField(12)
+  bool isReviewed;
+
+  /// 🧠 Expert note / advice
+  @HiveField(13)
+  String? expertNote;
+
+  /// ⚠ Severity level (low / medium / high)
+  @HiveField(14)
+  String? severityLevel;
 
   DetectionResultModel({
     required this.id,
@@ -66,5 +82,10 @@ class DetectionResultModel extends HiveObject {
     this.isSynced = false,
     this.latitude,
     this.longitude,
+
+    // 🆕 NEW DEFAULTS
+    this.isReviewed = false,
+    this.expertNote,
+    this.severityLevel,
   });
 }

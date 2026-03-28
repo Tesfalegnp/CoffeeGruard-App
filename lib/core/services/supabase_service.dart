@@ -5,26 +5,19 @@ class SupabaseService {
   final client = Supabase.instance.client;
 
   /// ===============================
-  /// 📸 UPLOAD IMAGE (FIXED BUCKET)
+  /// 📸 UPLOAD IMAGE
   /// ===============================
   Future<String?> uploadImage(File file, String fileName) async {
     try {
       final path = "uploads/$fileName";
 
-      print("📤 Uploading image to Supabase...");
-
       await client.storage
-          .from('coffee-images') // ✅ YOUR REAL BUCKET NAME
+          .from('coffee-images')
           .upload(path, file);
 
-      final url = client.storage
+      return client.storage
           .from('coffee-images')
           .getPublicUrl(path);
-
-      print("✅ Upload success");
-
-      return url;
-
     } catch (e) {
       print("❌ Upload error: $e");
       return null;
@@ -36,14 +29,8 @@ class SupabaseService {
   /// ===============================
   Future<bool> insertDetection(Map<String, dynamic> data) async {
     try {
-      print("📡 Sending detection to Supabase...");
-
       await client.from('detections').insert(data);
-
-      print("✅ Detection inserted");
-
       return true;
-
     } catch (e) {
       print("❌ Insert error: $e");
       return false;
@@ -51,28 +38,54 @@ class SupabaseService {
   }
 
   /// ===============================
-  /// 💡 GET RECOMMENDATION (FIXED)
+  /// 🧠 UPDATE DETECTION REVIEW (MAP BASED)
+  /// ===============================
+  Future<bool> updateDetectionReview(String detectionId, Map<String, dynamic> data) async {
+    try {
+      await client
+          .from('detections')
+          .update(data)
+          .eq('id', detectionId);
+
+      print("✅ Expert review updated");
+      return true;
+    } catch (e) {
+      print("❌ Review update error: $e");
+      return false;
+    }
+  }
+
+  /// ===============================
+  /// 📥 FETCH DETECTIONS (WITH REVIEW)
+  /// ===============================
+  Future<List<Map<String, dynamic>>> fetchDetections() async {
+    try {
+      final response = await client
+          .from('detections')
+          .select()
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Fetch detections error: $e");
+      return [];
+    }
+  }
+
+  /// ===============================
+  /// 💡 GET RECOMMENDATION BY DISEASE
   /// ===============================
   Future<Map<String, dynamic>?> getRecommendationByDisease(String disease) async {
     try {
-      print("🔎 Fetching recommendation for: $disease");
-
       final response = await client
           .from('recommendations')
           .select()
-          .ilike('disease_label', disease) // ✅ FIXED COLUMN NAME
+          .ilike('disease_label', disease)
           .order('updated_at', ascending: false)
           .limit(1)
           .maybeSingle();
 
-      if (response == null) {
-        print("⚠️ No recommendation found for $disease");
-      } else {
-        print("✅ Recommendation fetched");
-      }
-
       return response;
-
     } catch (e) {
       print("❌ Recommendation fetch error: $e");
       return null;
@@ -81,23 +94,17 @@ class SupabaseService {
 
   /// ===============================
   /// 📥 GET ALL RECOMMENDATIONS
-  /// (FOR OFFLINE SYNC - NEXT STEP)
   /// ===============================
   Future<List<Map<String, dynamic>>> getAllRecommendations() async {
     try {
-      print("📥 Fetching all recommendations...");
-
       final response = await client
           .from('recommendations')
           .select()
           .order('updated_at', ascending: false);
 
-      print("✅ Recommendations fetched: ${response.length}");
-
       return List<Map<String, dynamic>>.from(response);
-
     } catch (e) {
-      print("❌ Fetch all recommendations error: $e");
+      print("❌ Fetch recommendations error: $e");
       return [];
     }
   }

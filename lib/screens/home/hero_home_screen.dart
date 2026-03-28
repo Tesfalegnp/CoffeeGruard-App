@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../widgets/image_picker_widget.dart';
 import '../../core/services/detection_service.dart';
 import '../../core/services/sync_service.dart';
 import '../detection/history_screen.dart';
+import '../expert/expert_dashboard.dart'; // ✅ NEW
 
 class HeroHomeScreen extends StatefulWidget {
   const HeroHomeScreen({super.key});
@@ -16,13 +18,14 @@ class HeroHomeScreen extends StatefulWidget {
 }
 
 class _HeroHomeScreenState extends State<HeroHomeScreen> {
-
   final DetectionService detectionService = DetectionService();
   final SyncService syncService = SyncService();
+  final FlutterTts tts = FlutterTts();
 
   final ScrollController _scrollController = ScrollController();
 
   bool isProcessing = false;
+  bool isSpeaking = false;
 
   File? selectedImage;
   String? disease;
@@ -38,11 +41,38 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
   void initState() {
     super.initState();
     detectionService.init();
+    _initTTS();
+  }
+
+  /// 🔊 INIT TTS
+  void _initTTS() async {
+    await tts.setLanguage("en-US");
+    await tts.setSpeechRate(0.5);
+    await tts.setPitch(1.0);
+
+    tts.setCompletionHandler(() {
+      setState(() => isSpeaking = false);
+    });
+  }
+
+  /// ▶ SPEAK
+  Future<void> _speak(String text) async {
+    if (text.isEmpty) return;
+
+    await tts.stop();
+    setState(() => isSpeaking = true);
+    await tts.speak(text);
+  }
+
+  /// ⏹ STOP
+  Future<void> _stopSpeak() async {
+    await tts.stop();
+    setState(() => isSpeaking = false);
   }
 
   Future<void> handleImage(File image) async {
-
     _typingTimer?.cancel();
+    await _stopSpeak();
 
     setState(() {
       selectedImage = image;
@@ -56,6 +86,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
 
     final result = await detectionService.runDetection(image);
 
+    /// ❌ ERROR
     if (result["success"] == false) {
       setState(() {
         isProcessing = false;
@@ -71,15 +102,15 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     final detectedDisease = result["disease"];
     final detectedConfidence = result["diseaseConfidence"];
 
+    /// ❌ NOT COFFEE
     if (detectedDisease.toLowerCase().contains("not") ||
         detectedDisease.toLowerCase().contains("unknown")) {
-
       setState(() {
         isCoffeeLeaf = false;
         disease = "Not a Coffee Leaf";
         confidence = detectedConfidence;
         recommendation =
-            "Please capture a clear coffee leaf.\n\n• Use natural light\n• Focus one leaf\n• Avoid blur";
+            "Please capture a clear coffee leaf. Use natural light, focus on one leaf, and avoid blur.";
         isProcessing = false;
       });
 
@@ -91,8 +122,8 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     final detectedRecommendation =
         result["recommendation"] ?? _smartRecommendation(detectedDisease);
 
+    /// 🌐 SYNC
     final connectivityResult = await Connectivity().checkConnectivity();
-
     if (connectivityResult != ConnectivityResult.none) {
       syncService.syncDetections();
     }
@@ -108,6 +139,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     _scrollToResult();
   }
 
+  /// ✍ TYPE EFFECT
   void _startTyping(String text) {
     displayedText = "";
     int index = 0;
@@ -124,6 +156,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     });
   }
 
+  /// 📜 AUTO SCROLL
   void _scrollToResult() {
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_scrollController.hasClients) {
@@ -136,15 +169,18 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     });
   }
 
+  /// 🧠 FALLBACK RECOMMENDATION
   String _smartRecommendation(String disease) {
     if (disease.toLowerCase().contains("healthy")) {
-      return "Healthy plant 🌿\n\nKeep monitoring and maintain watering.";
+      return "Healthy plant. Keep monitoring and maintain proper watering.";
     }
-    return "Disease detected ⚠️\n\n• Remove infected leaves\n• Apply fungicide\n• Monitor daily";
+    return "Disease detected. Remove infected leaves, apply fungicide, and monitor daily.";
   }
 
-  void _reset() {
+  /// 🔄 RESET
+  void _reset() async {
     _typingTimer?.cancel();
+    await _stopSpeak();
 
     setState(() {
       selectedImage = null;
@@ -160,12 +196,12 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
   void dispose() {
     _typingTimer?.cancel();
     _scrollController.dispose();
+    tts.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-
     final percent =
         confidence != null ? (confidence! * 100).toStringAsFixed(1) : "0";
 
@@ -177,28 +213,22 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
 
     return Scaffold(
       drawer: _buildDrawer(context),
-
       appBar: AppBar(
         title: const Text("CoffeeGuard"),
         centerTitle: true,
         backgroundColor: Colors.green.shade700,
       ),
-
       body: SingleChildScrollView(
         controller: _scrollController,
         child: Column(
           children: [
-
-            /// HEADER
+            /// 🌿 HEADER
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Colors.green.shade700,
-                    Colors.green.shade400
-                  ],
+                  colors: [Colors.green.shade700, Colors.green.shade400],
                 ),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(25),
@@ -224,10 +254,9 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
 
-            /// PICKER
+            /// 📸 PICKER
             if (selectedImage == null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -236,7 +265,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                 ),
               ),
 
-            /// PROCESSING
+            /// ⏳ PROCESSING
             if (isProcessing && selectedImage != null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -258,7 +287,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                 ),
               ),
 
-            /// RESULT
+            /// 📊 RESULT
             if (!isProcessing && disease != null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -271,8 +300,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-
-                        /// ✅ IMAGE FIRST (NEW)
                         if (selectedImage != null)
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
@@ -283,21 +310,16 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                               fit: BoxFit.cover,
                             ),
                           ),
-
                         const SizedBox(height: 15),
-
                         Text(
                           disease!,
-                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: statusColor,
                           ),
                         ),
-
                         const SizedBox(height: 10),
-
                         if (confidence != null)
                           Column(
                             children: [
@@ -306,9 +328,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                               Text("Confidence: $percent%"),
                             ],
                           ),
-
                         const SizedBox(height: 20),
-
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
@@ -316,12 +336,32 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
-
                         const SizedBox(height: 10),
-
                         Text(displayedText),
+                        const SizedBox(height: 15),
 
-                        const SizedBox(height: 20),
+                        /// 🔊 SPEAKER BUTTON
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  if (isSpeaking) {
+                                    _stopSpeak();
+                                  } else {
+                                    _speak(recommendation ?? "");
+                                  }
+                                },
+                                icon: Icon(
+                                  isSpeaking ? Icons.stop : Icons.volume_up,
+                                ),
+                                label: Text(isSpeaking ? "Stop" : "Read Recommendation"),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 15),
 
                         Row(
                           children: [
@@ -348,8 +388,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                 ),
               ),
 
-            const SizedBox(height: 20),
-
             const SizedBox(height: 30),
           ],
         ),
@@ -357,11 +395,13 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     );
   }
 
+  /// ===========================
+  /// DRAWER
+  /// ===========================
   Widget _buildDrawer(BuildContext context) {
     return Drawer(
       child: ListView(
         children: [
-
           DrawerHeader(
             decoration: BoxDecoration(color: Colors.green.shade700),
             child: const Column(
@@ -377,6 +417,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
             ),
           ),
 
+          // History button
           ListTile(
             leading: const Icon(Icons.history),
             title: const Text("History"),
@@ -385,6 +426,20 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => const HistoryScreen(),
+                ),
+              );
+            },
+          ),
+
+          // ✅ Expert Dashboard button
+          ListTile(
+            leading: const Icon(Icons.dashboard_customize),
+            title: const Text("Expert Dashboard"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ExpertDashboard(),
                 ),
               );
             },
