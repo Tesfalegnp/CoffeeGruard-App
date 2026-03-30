@@ -8,7 +8,8 @@ import '../../widgets/image_picker_widget.dart';
 import '../../core/services/detection_service.dart';
 import '../../core/services/sync_service.dart';
 import '../detection/history_screen.dart';
-import '../expert/expert_dashboard.dart'; // ✅ NEW
+import '../expert/expert_dashboard.dart';
+import '../admin/admin_dashboard.dart'; // ✅ NEW
 
 class HeroHomeScreen extends StatefulWidget {
   const HeroHomeScreen({super.key});
@@ -44,7 +45,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     _initTTS();
   }
 
-  /// 🔊 INIT TTS
   void _initTTS() async {
     await tts.setLanguage("en-US");
     await tts.setSpeechRate(0.5);
@@ -55,7 +55,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     });
   }
 
-  /// ▶ SPEAK
   Future<void> _speak(String text) async {
     if (text.isEmpty) return;
 
@@ -64,7 +63,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     await tts.speak(text);
   }
 
-  /// ⏹ STOP
   Future<void> _stopSpeak() async {
     await tts.stop();
     setState(() => isSpeaking = false);
@@ -86,14 +84,12 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
 
     final result = await detectionService.runDetection(image);
 
-    /// ❌ ERROR
     if (result["success"] == false) {
       setState(() {
         isProcessing = false;
         disease = "Detection Failed";
         recommendation = result["message"];
       });
-
       _startTyping(recommendation ?? "");
       _scrollToResult();
       return;
@@ -102,7 +98,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     final detectedDisease = result["disease"];
     final detectedConfidence = result["diseaseConfidence"];
 
-    /// ❌ NOT COFFEE
     if (detectedDisease.toLowerCase().contains("not") ||
         detectedDisease.toLowerCase().contains("unknown")) {
       setState(() {
@@ -113,7 +108,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
             "Please capture a clear coffee leaf. Use natural light, focus on one leaf, and avoid blur.";
         isProcessing = false;
       });
-
       _startTyping(recommendation!);
       _scrollToResult();
       return;
@@ -122,7 +116,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     final detectedRecommendation =
         result["recommendation"] ?? _smartRecommendation(detectedDisease);
 
-    /// 🌐 SYNC
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult != ConnectivityResult.none) {
       syncService.syncDetections();
@@ -139,7 +132,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     _scrollToResult();
   }
 
-  /// ✍ TYPE EFFECT
   void _startTyping(String text) {
     displayedText = "";
     int index = 0;
@@ -156,7 +148,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     });
   }
 
-  /// 📜 AUTO SCROLL
   void _scrollToResult() {
     Future.delayed(const Duration(milliseconds: 300), () {
       if (_scrollController.hasClients) {
@@ -169,7 +160,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     });
   }
 
-  /// 🧠 FALLBACK RECOMMENDATION
   String _smartRecommendation(String disease) {
     if (disease.toLowerCase().contains("healthy")) {
       return "Healthy plant. Keep monitoring and maintain proper watering.";
@@ -177,7 +167,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     return "Disease detected. Remove infected leaves, apply fungicide, and monitor daily.";
   }
 
-  /// 🔄 RESET
   void _reset() async {
     _typingTimer?.cancel();
     await _stopSpeak();
@@ -222,7 +211,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
         controller: _scrollController,
         child: Column(
           children: [
-            /// 🌿 HEADER
+            // HEADER
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -255,17 +244,12 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            /// 📸 PICKER
+            // PICKER, PROCESSING & RESULT
             if (selectedImage == null)
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: ImagePickerWidget(
-                  onImageSelected: handleImage,
-                ),
+                child: ImagePickerWidget(onImageSelected: handleImage),
               ),
-
-            /// ⏳ PROCESSING
             if (isProcessing && selectedImage != null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -286,15 +270,12 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                   ],
                 ),
               ),
-
-            /// 📊 RESULT
             if (!isProcessing && disease != null)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Card(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
+                      borderRadius: BorderRadius.circular(15)),
                   elevation: 4,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -314,10 +295,9 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                         Text(
                           disease!,
                           style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: statusColor,
-                          ),
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: statusColor),
                         ),
                         const SizedBox(height: 10),
                         if (confidence != null)
@@ -339,8 +319,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                         const SizedBox(height: 10),
                         Text(displayedText),
                         const SizedBox(height: 15),
-
-                        /// 🔊 SPEAKER BUTTON
                         Row(
                           children: [
                             Expanded(
@@ -355,14 +333,14 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                                 icon: Icon(
                                   isSpeaking ? Icons.stop : Icons.volume_up,
                                 ),
-                                label: Text(isSpeaking ? "Stop" : "Read Recommendation"),
+                                label: Text(isSpeaking
+                                    ? "Stop"
+                                    : "Read Recommendation"),
                               ),
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 15),
-
                         Row(
                           children: [
                             Expanded(
@@ -387,7 +365,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                   ),
                 ),
               ),
-
             const SizedBox(height: 30),
           ],
         ),
@@ -395,9 +372,6 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     );
   }
 
-  /// ===========================
-  /// DRAWER
-  /// ===========================
   Widget _buildDrawer(BuildContext context) {
     return Drawer(
       child: ListView(
@@ -416,32 +390,28 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
               ],
             ),
           ),
-
-          // History button
           ListTile(
             leading: const Icon(Icons.history),
             title: const Text("History"),
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const HistoryScreen(),
-                ),
-              );
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const HistoryScreen()));
             },
           ),
-
-          // ✅ Expert Dashboard button
           ListTile(
             leading: const Icon(Icons.dashboard_customize),
             title: const Text("Expert Dashboard"),
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ExpertDashboard(),
-                ),
-              );
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ExpertDashboard()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.admin_panel_settings),
+            title: const Text("Admin Dashboard"),
+            onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AdminDashboard()));
             },
           ),
         ],

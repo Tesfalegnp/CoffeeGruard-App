@@ -38,23 +38,44 @@ class SupabaseService {
   }
 
   /// ===============================
-  /// 🧠 UPDATE DETECTION REVIEW (MAP BASED)
+  /// 🧠 UPDATE DETECTION REVIEW (FIXED 🔥)
   /// ===============================
-  Future<bool> updateDetectionReview(String detectionId, Map<String, dynamic> data) async {
+  Future<bool> updateDetectionReview(
+      String detectionId, Map<String, dynamic> data) async {
     try {
-      await client
+      print("📡 Updating detection ID: $detectionId");
+      print("📦 Data: $data");
+
+      final response = await client
           .from('detections')
           .update(data)
-          .eq('id', detectionId);
+          .eq('id', detectionId)
+          .select(); // ✅ IMPORTANT: returns updated rows
 
-      print("✅ Expert review updated");
+      if (response == null || response.isEmpty) {
+        print("❌ No rows updated → ID mismatch or not found");
+        return false;
+      }
+
+      print("✅ DB Updated: $response");
       return true;
     } catch (e) {
       print("❌ Review update error: $e");
       return false;
     }
   }
-
+ /// ===============================
+  /// 📥 recommedation update
+  /// ===============================
+  Future<bool> updateRecommendation(String id, Map<String, dynamic> data) async {
+    try {
+      await client.from('recommendations').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print("❌ Recommendation update error: $e");
+      return false;
+    }
+  }
   /// ===============================
   /// 📥 FETCH DETECTIONS (WITH REVIEW)
   /// ===============================

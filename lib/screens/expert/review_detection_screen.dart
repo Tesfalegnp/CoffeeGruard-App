@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/services/supabase_service.dart';
+import '../../core/services/sync_service.dart';
 import '../../models/detection_result_model.dart';
 import 'package:intl/intl.dart';
 
@@ -9,11 +9,14 @@ class ReviewDetectionScreen extends StatefulWidget {
   const ReviewDetectionScreen({super.key, required this.detection});
 
   @override
-  State<ReviewDetectionScreen> createState() => _ReviewDetectionScreenState();
+  State<ReviewDetectionScreen> createState() =>
+      _ReviewDetectionScreenState();
 }
 
-class _ReviewDetectionScreenState extends State<ReviewDetectionScreen> {
-  final SupabaseService _supabase = SupabaseService();
+class _ReviewDetectionScreenState
+    extends State<ReviewDetectionScreen> {
+
+  final SyncService _syncService = SyncService();
 
   late TextEditingController _noteController;
   String? _selectedSeverity;
@@ -22,22 +25,25 @@ class _ReviewDetectionScreenState extends State<ReviewDetectionScreen> {
   @override
   void initState() {
     super.initState();
-    _noteController = TextEditingController(text: widget.detection.expertNote);
-    _selectedSeverity = widget.detection.severityLevel ?? "low";
+    _noteController =
+        TextEditingController(text: widget.detection.expertNote);
+    _selectedSeverity =
+        widget.detection.severityLevel ?? "low";
   }
 
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
+  Color _severityColor(String? s) {
+    switch (s) {
+      case "high":
+        return Colors.red;
+      case "medium":
+        return Colors.orange;
+      default:
+        return Colors.green;
+    }
   }
 
   Future<void> _saveReview() async {
-    if (_selectedSeverity == null || _selectedSeverity!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Please select severity level")));
-      return;
-    }
+    if (_selectedSeverity == null) return;
 
     setState(() => _loading = true);
 
@@ -48,20 +54,34 @@ class _ReviewDetectionScreenState extends State<ReviewDetectionScreen> {
     };
 
     try {
-      final success = await _supabase.updateDetectionReview(widget.detection.id, data);
+      final success = await _syncService.updateExpertReview(
+        widget.detection.id,
+        data,
+      );
 
-      if (success) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("✅ Review saved to cloud")));
-        Navigator.pop(context, true); // return true to refresh dashboard
-      } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("❌ Failed to save review")));
+      if (!success) throw Exception("Update failed");
+
+      widget.detection.isReviewed = true;
+      widget.detection.expertNote = _noteController.text.trim();
+      widget.detection.severityLevel = _selectedSeverity;
+
+      if (widget.detection.isInBox) {
+        await widget.detection.save();
       }
+
+      await _syncService.pullExpertUpdates();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("✅ Review saved")),
+        );
+        Navigator.pop(context, true);
+      }
+
     } catch (e) {
-      print("Error saving review: $e");
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("❌ Error updating cloud")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("❌ Failed to update")),
+      );
     } finally {
       setState(() => _loading = false);
     }
@@ -69,105 +89,187 @@ class _ReviewDetectionScreenState extends State<ReviewDetectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     final d = widget.detection;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Review Detection")),
+      appBar: AppBar(
+        title: const Text("Review Detection"),
+        backgroundColor: Colors.green.shade700,
+      ),
+
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // =========================
-                  // Image
-                  // =========================
+
+                  /// 📸 IMAGE CARD
                   if (d.imageUrl != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        d.imageUrl!,
-                        width: double.infinity,
-                        height: 200,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 100),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 5,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.network(
+                          d.imageUrl!,
+                          height: 220,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
-                  const SizedBox(height: 12),
 
-                  // =========================
-                  // Disease + Confidence
-                  // =========================
-                  Text("Disease: ${d.diseaseLabel ?? 'Unknown'}",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text("Confidence: ${d.diseaseConfidence?.toStringAsFixed(2) ?? '-'}"),
-                  const SizedBox(height: 8),
-
-                  // =========================
-                  // Recommendation
-                  // =========================
-                  if (d.recommendation != null)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("AI Recommendation:",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text(d.recommendation!),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
-
-                  // =========================
-                  // Metadata (location, timestamp)
-                  // =========================
-                  const Text("Metadata:", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(
-                      "Captured at: ${DateFormat('yyyy-MM-dd HH:mm').format(d.createdAt)}"),
-                  Text(
-                      "Location: ${d.latitude != null && d.longitude != null ? '${d.latitude}, ${d.longitude}' : 'Not available'}"),
-                  const SizedBox(height: 16),
-
-                  // =========================
-                  // Expert Note
-                  // =========================
-                  TextField(
-                    controller: _noteController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: "Expert Note / Advice",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // =========================
-                  // Severity Dropdown
-                  // =========================
-                  DropdownButtonFormField<String>(
-                    value: _selectedSeverity,
-                    decoration: const InputDecoration(
-                      labelText: "Severity Level",
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: "low", child: Text("Low 🟢")),
-                      DropdownMenuItem(value: "medium", child: Text("Medium 🟡")),
-                      DropdownMenuItem(value: "high", child: Text("High 🔴")),
-                    ],
-                    onChanged: (val) => setState(() => _selectedSeverity = val),
-                  ),
                   const SizedBox(height: 20),
 
-                  // =========================
-                  // Save Button
-                  // =========================
+                  /// 🌿 DISEASE INFO CARD
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    elevation: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                d.diseaseLabel ?? "Unknown",
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+
+                              Chip(
+                                label: Text(
+                                  _selectedSeverity!.toUpperCase(),
+                                ),
+                                backgroundColor:
+                                    _severityColor(_selectedSeverity)
+                                        .withOpacity(0.2),
+                                labelStyle: TextStyle(
+                                  color: _severityColor(
+                                      _selectedSeverity),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          LinearProgressIndicator(
+                            value: d.diseaseConfidence ?? 0,
+                            minHeight: 8,
+                          ),
+
+                          const SizedBox(height: 5),
+
+                          Text(
+                            "Confidence: ${(d.diseaseConfidence ?? 0) * 100}%",
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                DateFormat('yyyy-MM-dd HH:mm')
+                                    .format(d.createdAt),
+                                style: const TextStyle(
+                                    color: Colors.grey),
+                              ),
+                              Text(
+                                d.isReviewed
+                                    ? "Reviewed ✅"
+                                    : "Pending ⏳",
+                                style: TextStyle(
+                                  color: d.isReviewed
+                                      ? Colors.green
+                                      : Colors.orange,
+                                ),
+                              ),
+                            ],
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  /// 📝 NOTE
+                  TextField(
+                    controller: _noteController,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      labelText: "Expert Note",
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(15),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  /// ⚠ SEVERITY
+                  DropdownButtonFormField<String>(
+                    value: _selectedSeverity,
+                    decoration: InputDecoration(
+                      labelText: "Severity",
+                      border: OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(15),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                          value: "low", child: Text("Low 🟢")),
+                      DropdownMenuItem(
+                          value: "medium",
+                          child: Text("Medium 🟡")),
+                      DropdownMenuItem(
+                          value: "high", child: Text("High 🔴")),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _selectedSeverity = v),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  /// 💾 SAVE BUTTON
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _saveReview,
-                      child: const Text("Save Review to Cloud"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            Colors.green.shade700,
+                        padding:
+                            const EdgeInsets.symmetric(
+                                vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(15),
+                        ),
+                      ),
+                      child: const Text(
+                        "Save Review",
+                        style: TextStyle(fontSize: 16),
+                      ),
                     ),
                   ),
                 ],

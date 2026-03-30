@@ -22,7 +22,7 @@ Future<void> main() async {
   // Initialize Hive (offline storage)
   await HiveService.init();
 
-  // 🔄 Sync recommendations from Supabase → Hive
+  // Sync recommendations from Supabase → Hive
   try {
     await RecommendationService().syncRecommendations();
     debugPrint("✅ Recommendations synced successfully");
@@ -44,7 +44,7 @@ class CoffeeGuardApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.green,
       ),
-      home: const HeroHomeScreen(),
+      home: const HeroHomeScreen(), // 🚀 Directly open Hero page
     );
   }
 }
