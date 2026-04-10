@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../core/services/hive_service.dart';
+
+import '../home/hero_home_screen.dart';
+import '../detection/history_screen.dart';
+import '../expert/expert_dashboard.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -11,9 +16,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: _buildDrawer(context),
       appBar: AppBar(
         title: const Text("Admin Dashboard"),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.green.shade700,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -23,87 +29,115 @@ class _AdminDashboardState extends State<AdminDashboard> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _actionButton(
-                  title: "Manage Users",
-                  icon: Icons.people,
-                  color: Colors.blue,
-                  onTap: () {},
-                ),
-                _actionButton(
-                  title: "View Reports",
-                  icon: Icons.report,
-                  color: Colors.orange,
-                  onTap: () {},
-                ),
-                _actionButton(
-                  title: "Manage Recommendations",
-                  icon: Icons.menu_book,
-                  color: Colors.green,
-                  onTap: () {},
-                ),
-                _actionButton(
-                  title: "System Settings",
-                  icon: Icons.settings,
-                  color: Colors.red,
-                  onTap: () {},
-                ),
+                _actionButton("Manage Users", Icons.people, Colors.blue),
+                _actionButton("Reports", Icons.report, Colors.orange),
+                _actionButton("Recommendations", Icons.menu_book, Colors.green),
+                _actionButton("Settings", Icons.settings, Colors.red),
               ],
             ),
             const SizedBox(height: 30),
-            const Text(
-              "Welcome, Admin!",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              "Use the buttons above to manage the system.",
-              textAlign: TextAlign.center,
-            ),
+            const Text("Welcome Admin!",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
     );
   }
 
-  Widget _actionButton({
-    required String title,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 150,
-        height: 90,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color.withOpacity(0.7), color.withOpacity(0.4)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.4),
-              blurRadius: 6,
-              offset: const Offset(2, 4),
-            )
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 28, color: Colors.white),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold),
+  /// ================= DRAWER =================
+  Widget _buildDrawer(BuildContext context) {
+    final user = HiveService.getCurrentUser();
+
+    return Drawer(
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            color: Colors.green.shade700,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.admin_panel_settings,
+                    color: Colors.white, size: 40),
+                const SizedBox(height: 10),
+                const Text("Admin Panel",
+                    style: TextStyle(color: Colors.white, fontSize: 18)),
+                Text(user?.email ?? "",
+                    style: const TextStyle(color: Colors.white70)),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          Expanded(
+            child: ListView(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.home),
+                  title: const Text("Farmer Home"),
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const HeroHomeScreen()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.dashboard),
+                  title: const Text("Expert Dashboard"),
+                  onTap: () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const ExpertDashboard()));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.history),
+                  title: const Text("History"),
+                  onTap: () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const HistoryScreen()));
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                minimumSize: const Size(double.infinity, 45),
+              ),
+              icon: const Icon(Icons.logout),
+              label: const Text("Logout"),
+              onPressed: () async {
+                await HiveService.clearUserSession();
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const HeroHomeScreen()),
+                  (_) => false,
+                );
+              },
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton(String t, IconData i, Color c) {
+    return Container(
+      width: 150,
+      height: 90,
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Center(
+        child: Text(t, style: const TextStyle(color: Colors.white)),
       ),
     );
   }

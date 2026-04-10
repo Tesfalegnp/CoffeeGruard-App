@@ -129,4 +129,23 @@ class SupabaseService {
       return [];
     }
   }
+    /// ===============================
+    /// 🔐 LOGIN USER (ROLE BASED)
+    /// ===============================
+    Future<Map<String, dynamic>?> loginUser(String email, String password) async {
+      try {
+        final response = await client
+            .from('users')
+            .select()
+            .eq('email', email)
+            .eq('password', password)
+            .maybeSingle();
+
+        return response;
+      } catch (e) {
+        print("❌ Login error: $e");
+        return null;
+      }
+    }
+
 }

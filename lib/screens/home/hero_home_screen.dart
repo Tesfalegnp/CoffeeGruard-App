@@ -7,9 +7,14 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../../widgets/image_picker_widget.dart';
 import '../../core/services/detection_service.dart';
 import '../../core/services/sync_service.dart';
+import '../../core/services/hive_service.dart';
+
+import '../../models/user_model.dart';
+
 import '../detection/history_screen.dart';
 import '../expert/expert_dashboard.dart';
-import '../admin/admin_dashboard.dart'; // ✅ NEW
+import '../admin/admin_dashboard.dart';
+import '../auth/login_screen.dart';
 
 class HeroHomeScreen extends StatefulWidget {
   const HeroHomeScreen({super.key});
@@ -38,11 +43,17 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
 
   bool isCoffeeLeaf = true;
 
+  /// 🔐 CURRENT USER
+  UserModel? currentUser;
+
   @override
   void initState() {
     super.initState();
     detectionService.init();
     _initTTS();
+
+    /// LOAD SESSION
+    currentUser = HiveService.getCurrentUser();
   }
 
   void _initTTS() async {
@@ -211,7 +222,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
         controller: _scrollController,
         child: Column(
           children: [
-            // HEADER
+            /// HEADER
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -243,13 +254,17 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                 ],
               ),
             ),
+
             const SizedBox(height: 20),
-            // PICKER, PROCESSING & RESULT
+
+            /// IMAGE PICKER
             if (selectedImage == null)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: ImagePickerWidget(onImageSelected: handleImage),
               ),
+
+            /// PROCESSING
             if (isProcessing && selectedImage != null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -270,6 +285,8 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                   ],
                 ),
               ),
+
+            /// RESULT
             if (!isProcessing && disease != null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -295,9 +312,10 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                         Text(
                           disease!,
                           style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: statusColor),
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: statusColor,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         if (confidence != null)
@@ -333,9 +351,9 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                                 icon: Icon(
                                   isSpeaking ? Icons.stop : Icons.volume_up,
                                 ),
-                                label: Text(isSpeaking
-                                    ? "Stop"
-                                    : "Read Recommendation"),
+                                label: Text(
+                                  isSpeaking ? "Stop" : "Read Recommendation",
+                                ),
                               ),
                             ),
                           ],
@@ -365,6 +383,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
                   ),
                 ),
               ),
+
             const SizedBox(height: 30),
           ],
         ),
@@ -372,49 +391,127 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     );
   }
 
+  /// ===============================
+  /// 🧭 ROLE-BASED DRAWER + SESSION
+  /// ===============================
   Widget _buildDrawer(BuildContext context) {
+    final role = currentUser?.role;
+
     return Drawer(
-      child: ListView(
-        children: [
-          DrawerHeader(
-            decoration: BoxDecoration(color: Colors.green.shade700),
-            child: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.eco, size: 40, color: Colors.white),
-                SizedBox(height: 10),
-                Text(
-                  "CoffeeGuard",
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              ],
+      child: SafeArea(
+        child: Column(
+          children: [
+            /// HEADER
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              color: Colors.green.shade700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.eco, size: 40, color: Colors.white),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "CoffeeGuard",
+                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  ),
+                  if (currentUser != null)
+                    Text(
+                      currentUser!.email ?? "",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                ],
+              ),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text("History"),
-            onTap: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const HistoryScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.dashboard_customize),
-            title: const Text("Expert Dashboard"),
-            onTap: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const ExpertDashboard()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.admin_panel_settings),
-            title: const Text("Admin Dashboard"),
-            onTap: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const AdminDashboard()));
-            },
-          ),
-        ],
+
+            /// MENU
+            Expanded(
+              child: ListView(
+                children: [
+                  /// FARMER
+                  ListTile(
+                    leading: const Icon(Icons.history),
+                    title: const Text("History"),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const HistoryScreen()),
+                      );
+                    },
+                  ),
+
+                  if (role == "expert")
+                    ListTile(
+                      leading: const Icon(Icons.dashboard_customize),
+                      title: const Text("Expert Dashboard"),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ExpertDashboard()),
+                        );
+                      },
+                    ),
+
+                  if (role == "admin")
+                    ListTile(
+                      leading: const Icon(Icons.admin_panel_settings),
+                      title: const Text("Admin Dashboard"),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const AdminDashboard()),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+
+            /// FOOTER
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: currentUser == null
+                  ? ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                      icon: const Icon(Icons.login),
+                      label: const Text("Login"),
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const LoginScreen()),
+                        );
+
+                        /// REFRESH AFTER LOGIN
+                        setState(() {
+                          currentUser = HiveService.getCurrentUser();
+                        });
+                      },
+                    )
+                  : ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        minimumSize: const Size(double.infinity, 45),
+                      ),
+                      icon: const Icon(Icons.logout),
+                      label: const Text("Logout"),
+                      onPressed: () async {
+                        await HiveService.clearUserSession();
+
+                        setState(() {
+                          currentUser = null;
+                        });
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

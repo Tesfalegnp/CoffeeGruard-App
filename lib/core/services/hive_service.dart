@@ -8,16 +8,18 @@ import '../../models/recommendation_model.dart';
 import 'sync_service.dart';
 
 class HiveService {
-
   static const String detectionBox = "detections";
   static const String userBox = "users";
   static const String recommendationBox = "recommendations";
+
+  /// 🔐 NEW SESSION BOX
+  static const String sessionBox = "session";
+  static const String sessionKey = "current_user";
 
   /// =========================
   /// INIT
   /// =========================
   static Future<void> init() async {
-
     await Hive.initFlutter();
 
     /// ✅ Register Adapters (SAFE)
@@ -37,13 +39,15 @@ class HiveService {
     await Hive.openBox<DetectionResultModel>(detectionBox);
     await Hive.openBox<UserModel>(userBox);
     await Hive.openBox<RecommendationModel>(recommendationBox);
+
+    /// ✅ OPEN SESSION BOX (NEW 🔥)
+    await Hive.openBox(sessionBox);
   }
 
   /// =========================
   /// 📸 IMAGE STORAGE
   /// =========================
   static Future<String> saveImageToLocal(File image) async {
-
     final dir = await getApplicationDocumentsDirectory();
 
     final newPath =
@@ -64,25 +68,21 @@ class HiveService {
     return Hive.box<DetectionResultModel>(detectionBox);
   }
 
-  /// ✅ SAVE + AUTO FULL SYNC (UPDATED 🔥)
+  /// ✅ SAVE + AUTO FULL SYNC (UNCHANGED)
   static Future<void> saveDetection(DetectionResultModel detection) async {
-
     try {
-
       print("🔥 saveDetection CALLED");
 
       final box = getDetectionBox();
-
       await box.add(detection);
 
       print("✅ Saved locally");
 
-      /// 🚀 AUTO FULL SYNC (DETECTIONS + RECOMMENDATIONS)
+      /// 🚀 AUTO FULL SYNC
       Future.microtask(() async {
         print("🚀 Starting FULL sync...");
         await SyncService().fullSync();
       });
-
     } catch (e) {
       print("❌ saveDetection error: $e");
     }
@@ -99,7 +99,7 @@ class HiveService {
   }
 
   /// =========================
-  /// 💡 RECOMMENDATION METHODS (SMART MATCH)
+  /// 💡 RECOMMENDATION METHODS
   /// =========================
 
   static Box<RecommendationModel> getRecommendationBox() {
@@ -109,9 +109,7 @@ class HiveService {
   /// 📥 Save all recommendations
   static Future<void> saveRecommendations(
       List<RecommendationModel> list) async {
-
     try {
-
       final box = getRecommendationBox();
 
       await box.clear();
@@ -121,7 +119,6 @@ class HiveService {
       }
 
       print("✅ Recommendations saved locally: ${list.length}");
-
     } catch (e) {
       print("❌ saveRecommendations error: $e");
     }
@@ -132,21 +129,18 @@ class HiveService {
     return getRecommendationBox().values.toList();
   }
 
-  /// 🔍 SMART MATCH (VERY IMPORTANT 🔥)
+  /// 🔍 SMART MATCH
   static RecommendationModel? getRecommendation(
       String disease, String severity) {
-
     final box = getRecommendationBox();
 
     try {
-
       final normalizedDisease =
           disease.toLowerCase().replaceAll(" ", "").trim();
 
-      final normalizedSeverity =
-          severity.toLowerCase().trim();
+      final normalizedSeverity = severity.toLowerCase().trim();
 
-      /// 1️⃣ Try EXACT match
+      /// 1️⃣ EXACT match
       try {
         return box.values.firstWhere(
           (e) =>
@@ -156,7 +150,7 @@ class HiveService {
         );
       } catch (_) {}
 
-      /// 2️⃣ Try CONTAINS match
+      /// 2️⃣ CONTAINS match
       try {
         return box.values.firstWhere(
           (e) =>
@@ -169,7 +163,7 @@ class HiveService {
         );
       } catch (_) {}
 
-      /// 3️⃣ Fallback (ignore severity)
+      /// 3️⃣ FALLBACK
       try {
         return box.values.firstWhere(
           (e) =>
@@ -178,12 +172,48 @@ class HiveService {
         );
       } catch (_) {}
 
-      print("⚠️ No local recommendation found (after all strategies)");
+      print("⚠️ No local recommendation found");
       return null;
-
     } catch (e) {
       print("❌ getRecommendation error: $e");
       return null;
+    }
+  }
+
+  /// =========================
+  /// 🔐 SESSION METHODS (NEW 🔥)
+  /// =========================
+
+  /// 💾 Save logged-in user
+  static Future<void> saveUserSession(UserModel user) async {
+    try {
+      final box = Hive.box(sessionBox);
+      await box.put(sessionKey, user);
+      print("✅ User session saved");
+    } catch (e) {
+      print("❌ saveUserSession error: $e");
+    }
+  }
+
+  /// 📥 Get current user
+  static UserModel? getCurrentUser() {
+    try {
+      final box = Hive.box(sessionBox);
+      return box.get(sessionKey);
+    } catch (e) {
+      print("❌ getCurrentUser error: $e");
+      return null;
+    }
+  }
+
+  /// 🚪 Logout (clear session)
+  static Future<void> clearUserSession() async {
+    try {
+      final box = Hive.box(sessionBox);
+      await box.delete(sessionKey);
+      print("✅ User logged out");
+    } catch (e) {
+      print("❌ clearUserSession error: $e");
     }
   }
 }
