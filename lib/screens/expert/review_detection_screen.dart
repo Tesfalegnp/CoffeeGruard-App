@@ -1,276 +1,241 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../../core/services/sync_service.dart';
 import '../../models/detection_result_model.dart';
-import 'package:intl/intl.dart';
 
 class ReviewDetectionScreen extends StatefulWidget {
   final DetectionResultModel detection;
 
-  const ReviewDetectionScreen({super.key, required this.detection});
+  const ReviewDetectionScreen({
+    super.key,
+    required this.detection,
+  });
 
   @override
   State<ReviewDetectionScreen> createState() =>
       _ReviewDetectionScreenState();
 }
 
-class _ReviewDetectionScreenState
-    extends State<ReviewDetectionScreen> {
-
+class _ReviewDetectionScreenState extends State<ReviewDetectionScreen> {
   final SyncService _syncService = SyncService();
 
   late TextEditingController _noteController;
-  String? _selectedSeverity;
+  String _selectedSeverity = "low";
   bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    _noteController =
-        TextEditingController(text: widget.detection.expertNote);
+
+    _noteController = TextEditingController(
+      text: widget.detection.expertNote ?? "",
+    );
+
     _selectedSeverity =
         widget.detection.severityLevel ?? "low";
   }
 
-  Color _severityColor(String? s) {
-    switch (s) {
-      case "high":
-        return Colors.red;
-      case "medium":
-        return Colors.orange;
-      default:
-        return Colors.green;
-    }
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
   }
 
-  Future<void> _saveReview() async {
-    if (_selectedSeverity == null) return;
+  Color _confidenceColor(double c) {
+    if (c >= 0.85) return Colors.green;
+    if (c >= 0.6) return Colors.orange;
+    return Colors.red;
+  }
 
+  /// ===============================
+  /// 🚀 SUBMIT REVIEW (FIXED)
+  /// ===============================
+  Future<void> _submitReview({required bool approved}) async {
     setState(() => _loading = true);
 
-    final data = {
-      "is_reviewed": true,
-      "expert_note": _noteController.text.trim(),
-      "severity": _selectedSeverity,
-    };
-
     try {
+      /// 🔥 IMPORTANT FIX: use severity_level (DB COLUMN)
+      final Map<String, dynamic> payload = {
+        "is_reviewed": true,
+        "expert_note": _noteController.text.trim(),
+        "severity_level": _selectedSeverity,
+        "status": approved ? "approved" : "rejected",
+        "updated_at": DateTime.now().toIso8601String(),
+      };
+
+      print("📡 Sending review update payload:");
+      print(payload);
+
       final success = await _syncService.updateExpertReview(
         widget.detection.id,
-        data,
+        payload,
       );
 
-      if (!success) throw Exception("Update failed");
-
-      widget.detection.isReviewed = true;
-      widget.detection.expertNote = _noteController.text.trim();
-      widget.detection.severityLevel = _selectedSeverity;
-
-      if (widget.detection.isInBox) {
-        await widget.detection.save();
+      if (!success) {
+        throw Exception("Update failed from Supabase layer");
       }
-
-      await _syncService.pullExpertUpdates();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Review saved")),
-        );
-        Navigator.pop(context, true);
+        Navigator.pop(context, true); // refresh queue
       }
-
     } catch (e) {
+      print("❌ Review update error: $e");
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("❌ Failed to update")),
+        const SnackBar(
+          content: Text("❌ Failed to update review"),
+        ),
       );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-
     final d = widget.detection;
+    final confidence = d.diseaseConfidence ?? 0.0;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Review Detection"),
-        backgroundColor: Colors.green.shade700,
+        title: const Text("Expert Review"),
+        backgroundColor: Colors.green,
       ),
-
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  /// 📸 IMAGE CARD
-                  if (d.imageUrl != null)
-                    Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      elevation: 5,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.network(
-                          d.imageUrl!,
-                          height: 220,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                  /// ================= IMAGE =================
+                  if (d.imageUrl != null && d.imageUrl!.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        d.imageUrl!,
+                        height: 220,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.broken_image, size: 80),
                       ),
                     ),
 
                   const SizedBox(height: 20),
 
-                  /// 🌿 DISEASE INFO CARD
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
+                  /// ================= DISEASE =================
+                  Text(
+                    d.diseaseLabel ?? "Unknown",
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
                     ),
-                    elevation: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
+                  ),
 
-                          Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                d.diseaseLabel ?? "Unknown",
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                  const SizedBox(height: 10),
 
-                              Chip(
-                                label: Text(
-                                  _selectedSeverity!.toUpperCase(),
-                                ),
-                                backgroundColor:
-                                    _severityColor(_selectedSeverity)
-                                        .withOpacity(0.2),
-                                labelStyle: TextStyle(
-                                  color: _severityColor(
-                                      _selectedSeverity),
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
+                  /// ================= CONFIDENCE =================
+                  LinearProgressIndicator(
+                    value: confidence,
+                    color: _confidenceColor(confidence),
+                    backgroundColor: Colors.grey.shade300,
+                  ),
 
-                          const SizedBox(height: 10),
+                  const SizedBox(height: 6),
 
-                          LinearProgressIndicator(
-                            value: d.diseaseConfidence ?? 0,
-                            minHeight: 8,
-                          ),
+                  Text(
+                    "Confidence: ${(confidence * 100).toStringAsFixed(2)}%",
+                  ),
 
-                          const SizedBox(height: 5),
+                  const SizedBox(height: 10),
 
-                          Text(
-                            "Confidence: ${(d.diseaseConfidence ?? 0) * 100}%",
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                DateFormat('yyyy-MM-dd HH:mm')
-                                    .format(d.createdAt),
-                                style: const TextStyle(
-                                    color: Colors.grey),
-                              ),
-                              Text(
-                                d.isReviewed
-                                    ? "Reviewed ✅"
-                                    : "Pending ⏳",
-                                style: TextStyle(
-                                  color: d.isReviewed
-                                      ? Colors.green
-                                      : Colors.orange,
-                                ),
-                              ),
-                            ],
-                          )
-                        ],
-                      ),
-                    ),
+                  /// ================= DATE =================
+                  Text(
+                    DateFormat('yyyy-MM-dd HH:mm')
+                        .format(d.createdAt),
+                    style: const TextStyle(color: Colors.grey),
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// 📝 NOTE
+                  /// ================= NOTE =================
                   TextField(
                     controller: _noteController,
                     maxLines: 4,
                     decoration: InputDecoration(
                       labelText: "Expert Note",
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
                       border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(15),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// ⚠ SEVERITY
+                  /// ================= SEVERITY =================
                   DropdownButtonFormField<String>(
                     value: _selectedSeverity,
-                    decoration: InputDecoration(
-                      labelText: "Severity",
-                      border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(15),
-                      ),
+                    decoration: const InputDecoration(
+                      labelText: "Severity Level",
+                      border: OutlineInputBorder(),
                     ),
                     items: const [
                       DropdownMenuItem(
-                          value: "low", child: Text("Low 🟢")),
+                        value: "low",
+                        child: Text("Low 🟢"),
+                      ),
                       DropdownMenuItem(
-                          value: "medium",
-                          child: Text("Medium 🟡")),
+                        value: "medium",
+                        child: Text("Medium 🟡"),
+                      ),
                       DropdownMenuItem(
-                          value: "high", child: Text("High 🔴")),
+                        value: "high",
+                        child: Text("High 🔴"),
+                      ),
                     ],
-                    onChanged: (v) =>
-                        setState(() => _selectedSeverity = v),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() => _selectedSeverity = v);
+                      }
+                    },
                   ),
 
-                  const SizedBox(height: 25),
+                  const SizedBox(height: 30),
 
-                  /// 💾 SAVE BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _saveReview,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            Colors.green.shade700,
-                        padding:
-                            const EdgeInsets.symmetric(
-                                vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(15),
+                  /// ================= ACTION BUTTONS =================
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.close),
+                          label: const Text("Reject"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                          ),
+                          onPressed: () =>
+                              _submitReview(approved: false),
                         ),
                       ),
-                      child: const Text(
-                        "Save Review",
-                        style: TextStyle(fontSize: 16),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.check),
+                          label: const Text("Approve"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                          ),
+                          onPressed: () =>
+                              _submitReview(approved: true),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),

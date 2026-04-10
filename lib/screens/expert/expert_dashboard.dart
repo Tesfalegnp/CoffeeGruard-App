@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../../core/services/sync_service.dart';
 import '../../models/detection_result_model.dart';
 
-import 'review_detection_screen.dart';
+import 'expert_queue_screen.dart';
 import 'manage_recommendations_screen.dart';
 import 'analytics_screen.dart';
 import 'model_performance_screen.dart';
 import 'image_gallery_screen.dart';
+import 'expert_settings_screen.dart';
 
 import '../auth/login_screen.dart';
 
@@ -29,32 +31,49 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
     _loadDetections();
   }
 
+  // ================= FIXED LOAD =================
   Future<void> _loadDetections() async {
     setState(() => _loading = true);
 
     try {
-      final data = await _syncService.pullExpertDetections();
+      // ✔ FIX: use correct existing method
+      final data = await _syncService.refreshExpertQueue();
+
       setState(() {
         _allDetections = data;
         _loading = false;
       });
     } catch (e) {
+      print("❌ Dashboard load error: $e");
       setState(() => _loading = false);
     }
   }
 
-  int get total => _allDetections.length;
-  int get reviewed => _allDetections.where((d) => d.isReviewed).length;
-  int get pending => _allDetections.where((d) => !d.isReviewed).length;
+  // ================= FIXED FILTERS =================
 
+  List<DetectionResultModel> get pending =>
+      _allDetections.where((d) =>
+          d.isReviewed == false || d.isReviewed == null).toList();
+
+  List<DetectionResultModel> get reviewed =>
+      _allDetections.where((d) => d.isReviewed == true).toList();
+
+  List<DetectionResultModel> get rejected =>
+      _allDetections.where((d) =>
+          d.isReviewed == true &&
+          (d.expertNote?.toLowerCase().contains("reject") ?? false))
+      .toList();
+
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: _buildDrawer(),
       appBar: AppBar(
         title: const Text("Expert Dashboard"),
-        backgroundColor: Colors.green.shade700,
+        backgroundColor: Colors.green,
       ),
+
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -63,33 +82,18 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
                 padding: const EdgeInsets.all(16),
                 children: [
 
-                  /// 🔘 ACTION BUTTONS
                   Wrap(
                     spacing: 12,
                     runSpacing: 12,
                     children: [
-                      _btn("Review", Icons.task, Colors.blue, () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ReviewDetectionScreen(
-                              detection: _allDetections.isNotEmpty
-                                  ? _allDetections.first
-                                  : throw Exception("No detection available"),
-                            ),
-                          ),
-                        );
-                      }),
 
-                      _btn("Recommendations", Icons.menu_book, Colors.orange,
-                          () {
+                      _btn("Queue", Icons.task, Colors.blue, () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const ManageRecommendationsScreen(),
+                            builder: (_) => const ExpertQueueScreen(),
                           ),
-                        );
+                        ).then((_) => _loadDetections());
                       }),
 
                       _btn("Analytics", Icons.bar_chart, Colors.purple, () {
@@ -105,8 +109,7 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const ModelPerformanceScreen(),
+                            builder: (_) => const ModelPerformanceScreen(),
                           ),
                         );
                       }),
@@ -120,21 +123,47 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
                         );
                       }),
 
+                      _btn("Recommendations", Icons.recommend, Colors.orange, () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ManageRecommendationsScreen(),
+                          ),
+                        );
+                      }),
+
                       _btn("Sync", Icons.sync, Colors.green, () async {
                         await _syncService.fullSync();
                         await _loadDetections();
+                      }),
+
+                      _btn("Settings", Icons.settings, Colors.grey, () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ExpertSettingsScreen(),
+                          ),
+                        );
                       }),
                     ],
                   ),
 
                   const SizedBox(height: 20),
 
-                  /// 📊 KPI
+                  // ================= KPI FIXED =================
                   Row(
                     children: [
-                      Expanded(child: _card("Total", total, Colors.blue)),
-                      Expanded(child: _card("Reviewed", reviewed, Colors.green)),
-                      Expanded(child: _card("Pending", pending, Colors.orange)),
+                      Expanded(child: _card("Total", _allDetections.length, Colors.blue)),
+                      Expanded(child: _card("Reviewed", reviewed.length, Colors.green)),
+                      Expanded(child: _card("Pending", pending.length, Colors.orange)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Expanded(child: _card("Rejected", rejected.length, Colors.red)),
                     ],
                   ),
                 ],
@@ -143,6 +172,7 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
     );
   }
 
+  // ================= BUTTON =================
   Widget _btn(String t, IconData i, Color c, VoidCallback tap) {
     return GestureDetector(
       onTap: tap,
@@ -161,14 +191,19 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
             Icon(i, color: Colors.white),
             const SizedBox(height: 5),
             Text(t,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold))
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            )
           ],
         ),
       ),
     );
   }
 
+  // ================= CARD =================
   Widget _card(String t, int v, Color c) {
     return Card(
       child: Padding(
@@ -176,20 +211,25 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
         child: Column(
           children: [
             Text(t),
-            Text("$v",
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(
+              "$v",
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// 🔐 SAFE DRAWER (NO ADMIN ACCESS)
+  // ================= DRAWER =================
   Widget _buildDrawer() {
     return Drawer(
       child: Column(
         children: [
+
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -207,35 +247,20 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
           ),
 
           ListTile(
-            leading: const Icon(Icons.photo),
-            title: const Text("Image Gallery"),
+            leading: const Icon(Icons.task),
+            title: const Text("Queue"),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const ImageGalleryScreen(),
+                  builder: (_) => const ExpertQueueScreen(),
                 ),
               );
             },
           ),
 
           ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text("Analytics"),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AnalyticsScreen(),
-                ),
-              );
-            },
-          ),
-
-          const Spacer(),
-
-          ListTile(
-            leading: const Icon(Icons.logout),
+            leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text("Logout"),
             onTap: () {
               Navigator.pushAndRemoveUntil(

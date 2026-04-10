@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import '../../models/detection_result_model.dart';
 import 'supabase_service.dart';
 import 'recommendation_service.dart';
@@ -9,16 +10,12 @@ class SyncService {
   final RecommendationService recommendationService = RecommendationService();
 
   /// =====================================================
-  /// 🚀 FULL SYNC (LOCAL + CLOUD)
+  /// 🚀 FULL SYNC
   /// =====================================================
   Future<void> fullSync() async {
-    print("🔄 FULL SYNC STARTED");
-
-    await syncDetections();      // push local unsynced detections
-    await syncRecommendations(); // push/fetch recommendations
-    await pullExpertUpdates();   // pull expert review updates
-
-    print("✅ FULL SYNC COMPLETED");
+    await syncDetections();
+    await syncRecommendations();
+    await pullExpertUpdates();
   }
 
   /// =====================================================
@@ -26,35 +23,38 @@ class SyncService {
   /// =====================================================
   Future<void> syncDetections() async {
     final unsynced = HiveService.getUnsyncedDetections();
-    if (unsynced.isEmpty) return;
 
     for (var detection in unsynced) {
       try {
         final file = File(detection.imageLocalPath ?? "");
         if (!file.existsSync()) continue;
 
-        final fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
-        final imageUrl = await supabaseService.uploadImage(file, fileName);
+        final fileName =
+            "${DateTime.now().millisecondsSinceEpoch}.jpg";
+
+        final imageUrl =
+            await supabaseService.uploadImage(file, fileName);
+
         if (imageUrl == null) continue;
 
         final record = {
-          "user_id": null,
           "image_url": imageUrl,
           "image_local_path": detection.imageLocalPath,
           "is_coffee_leaf": detection.isCoffeeLeaf,
           "leaf_confidence": detection.leafConfidence,
           "disease_label": detection.diseaseLabel,
           "disease_confidence": detection.diseaseConfidence,
-          "recommendation_text": detection.recommendation,
           "location_lat": detection.latitude,
           "location_lng": detection.longitude,
-          "is_reviewed": detection.isReviewed,
+          "is_reviewed": detection.isReviewed ?? false,
           "expert_note": detection.expertNote,
           "severity": detection.severityLevel,
-          "created_at": detection.createdAt.toIso8601String()
+          "created_at": detection.createdAt.toIso8601String(),
         };
 
-        final success = await supabaseService.insertDetection(record);
+        final success =
+            await supabaseService.insertDetection(record);
+
         if (success) {
           detection.isSynced = true;
           await detection.save();
@@ -66,86 +66,154 @@ class SyncService {
   }
 
   /// =====================================================
-  /// 📥 PULL EXPERT UPDATES (CLOUD → LOCAL)
+  /// 📥 PULL EXPERT UPDATES
   /// =====================================================
   Future<void> pullExpertUpdates() async {
-    try {
-      print("📥 Pulling expert updates...");
-      final cloudData = await supabaseService.fetchDetections();
-      final localList = HiveService.getAllDetections();
+    final cloudData = await supabaseService.fetchDetections();
+    final localList = HiveService.getAllDetections();
 
-      for (var cloud in cloudData) {
-        final local = localList.firstWhere(
-          (e) => e.id == cloud["id"],
-          orElse: () => DetectionResultModel(
-            id: cloud["id"] ?? "",
-            isCoffeeLeaf: cloud["is_coffee_leaf"] ?? false,
-            createdAt: DateTime.tryParse(cloud["created_at"] ?? "") ?? DateTime.now(),
-          ),
-        );
+    for (var cloud in cloudData) {
+      final local = localList.firstWhere(
+        (e) => e.id == cloud["id"],
+        orElse: () => DetectionResultModel(
+          id: cloud["id"] ?? "",
+          isCoffeeLeaf: cloud["is_coffee_leaf"] ?? false,
+          createdAt: DateTime.now(),
+        ),
+      );
 
-        // Update expert fields only
-        local.isReviewed = cloud["is_reviewed"] ?? false;
-        local.expertNote = cloud["expert_note"];
-        local.severityLevel = cloud["severity"];
+      local.isReviewed = cloud["is_reviewed"] ?? false;
+      local.expertNote = cloud["expert_note"];
+      local.severityLevel =
+          cloud["severity"] ?? cloud["severity_level"];
 
-        await local.save();
-      }
-      print("✅ Expert updates synced");
-    } catch (e) {
-      print("❌ Pull error: $e");
+      await local.save();
     }
   }
 
   /// =====================================================
-  /// 🌐 PULL DETECTIONS FOR EXPERT DASHBOARD (CLOUD ONLY)
+  /// 🌐 EXPERT QUEUE (FIXED MODEL MAPPING)
   /// =====================================================
   Future<List<DetectionResultModel>> pullExpertDetections() async {
-    final cloudData = await supabaseService.fetchDetections();
+    final cloudData =
+        await supabaseService.fetchPendingDetections();
 
-    final List<DetectionResultModel> detections = cloudData.map((d) {
+    return cloudData.map((d) {
       return DetectionResultModel(
         id: d["id"] ?? "",
-        isCoffeeLeaf: d["is_coffee_leaf"] ?? false, // required
+        isCoffeeLeaf: d["is_coffee_leaf"] ?? false,
         imageUrl: d["image_url"],
+        imageLocalPath: d["image_local_path"],
+        leafConfidence:
+            (d["leaf_confidence"] as num?)?.toDouble(),
         diseaseLabel: d["disease_label"],
-        severityLevel: d["severity"],
+        diseaseConfidence:
+            (d["disease_confidence"] as num?)?.toDouble(),
+        latitude: (d["location_lat"] as num?)?.toDouble(),
+        longitude: (d["location_lng"] as num?)?.toDouble(),
         isReviewed: d["is_reviewed"] ?? false,
         expertNote: d["expert_note"],
-        createdAt: DateTime.tryParse(d["created_at"] ?? "") ?? DateTime.now(),
-        leafConfidence: d["leaf_confidence"]?.toDouble(),
-        diseaseConfidence: d["disease_confidence"]?.toDouble(),
-        latitude: d["location_lat"]?.toDouble(),
-        longitude: d["location_lng"]?.toDouble(),
-        recommendation: d["recommendation_text"],
+        severityLevel:
+            d["severity"] ?? d["severity_level"],
+        createdAt:
+            DateTime.tryParse(d["created_at"] ?? "") ??
+                DateTime.now(),
       );
     }).toList();
-
-    return detections;
   }
 
   /// =====================================================
   /// 💡 SYNC RECOMMENDATIONS
   /// =====================================================
   Future<void> syncRecommendations() async {
+    await recommendationService.syncRecommendations();
+  }
+
+  /// =====================================================
+  /// ✅ FIXED EXPERT REVIEW UPDATE (🔥 MAIN FIX)
+  /// =====================================================
+  Future<bool> updateExpertReview(
+    String detectionId,
+    Map<String, dynamic> data,
+  ) async {
     try {
-      await recommendationService.syncRecommendations();
+      print("📡 Updating detection: $detectionId");
+      print("📦 Raw data: $data");
+
+      final safeData = Map<String, dynamic>.from(data);
+
+      /// ===============================
+      /// FIELD NORMALIZATION FIX
+      /// ===============================
+
+      // Convert severity_level → severity (DB column fix)
+      if (safeData.containsKey("severity_level")) {
+        safeData["severity"] = safeData["severity_level"];
+        safeData.remove("severity_level");
+      }
+
+      // ensure severity exists correctly
+      if (safeData.containsKey("severity")) {
+        safeData["severity"] = safeData["severity"];
+      }
+
+      /// ===============================
+      /// BOOLEAN FIX
+      /// ===============================
+      if (safeData.containsKey("is_reviewed")) {
+        safeData["is_reviewed"] =
+            safeData["is_reviewed"] == true;
+      }
+
+      /// ===============================
+      /// ALWAYS UPDATE TIMESTAMP
+      /// ===============================
+      safeData["updated_at"] = DateTime.now().toIso8601String();
+
+      /// ===============================
+      /// SUPABASE UPDATE (CRITICAL FIX)
+      /// ===============================
+      final response = await supabaseService.client
+          .from('detections')
+          .update(safeData)
+          .eq('id', detectionId)
+          .select();
+
+      print("📦 Supabase response: $response");
+
+      /// ===============================
+      /// REAL SUCCESS CHECK
+      /// ===============================
+      if (response.isEmpty) {
+        print("❌ UPDATE FAILED: No row returned (RLS or wrong ID)");
+        return false;
+      }
+
+      print("✅ UPDATE SUCCESSFUL");
+      return true;
     } catch (e) {
-      print("❌ Recommendation sync error: $e");
+      print("❌ Update expert review error: $e");
+      return false;
     }
   }
 
   /// =====================================================
-  /// 📥 GET LOCAL DETECTIONS HELPER
+  /// ❌ DELETE DETECTION
   /// =====================================================
-  Future<List<DetectionResultModel>> getLocalDetections() async {
-    return HiveService.getAllDetections();
+  Future<bool> deleteDetection(String id) async {
+    try {
+      await supabaseService.deleteDetection(id);
+      return true;
+    } catch (e) {
+      print("❌ Delete error: $e");
+      return false;
+    }
   }
 
   /// =====================================================
-  /// 🌐 UPDATE EXPERT REVIEW (CLOUD ONLY)
+  /// 🔄 REFRESH QUEUE
   /// =====================================================
-  Future<bool> updateExpertReview(String detectionId, Map<String, dynamic> data) async {
-    return await supabaseService.updateDetectionReview(detectionId, data);
+  Future<List<DetectionResultModel>> refreshExpertQueue() async {
+    return await pullExpertDetections();
   }
 }

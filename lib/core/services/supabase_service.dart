@@ -15,9 +15,12 @@ class SupabaseService {
           .from('coffee-images')
           .upload(path, file);
 
-      return client.storage
-          .from('coffee-images')
-          .getPublicUrl(path);
+      final publicUrl =
+          client.storage.from('coffee-images').getPublicUrl(path);
+
+      print("✅ Image uploaded: $publicUrl");
+
+      return publicUrl;
     } catch (e) {
       print("❌ Upload error: $e");
       return null;
@@ -30,6 +33,7 @@ class SupabaseService {
   Future<bool> insertDetection(Map<String, dynamic> data) async {
     try {
       await client.from('detections').insert(data);
+      print("✅ Detection inserted");
       return true;
     } catch (e) {
       print("❌ Insert error: $e");
@@ -38,46 +42,7 @@ class SupabaseService {
   }
 
   /// ===============================
-  /// 🧠 UPDATE DETECTION REVIEW (FIXED 🔥)
-  /// ===============================
-  Future<bool> updateDetectionReview(
-      String detectionId, Map<String, dynamic> data) async {
-    try {
-      print("📡 Updating detection ID: $detectionId");
-      print("📦 Data: $data");
-
-      final response = await client
-          .from('detections')
-          .update(data)
-          .eq('id', detectionId)
-          .select(); // ✅ IMPORTANT: returns updated rows
-
-      if (response == null || response.isEmpty) {
-        print("❌ No rows updated → ID mismatch or not found");
-        return false;
-      }
-
-      print("✅ DB Updated: $response");
-      return true;
-    } catch (e) {
-      print("❌ Review update error: $e");
-      return false;
-    }
-  }
- /// ===============================
-  /// 📥 recommedation update
-  /// ===============================
-  Future<bool> updateRecommendation(String id, Map<String, dynamic> data) async {
-    try {
-      await client.from('recommendations').update(data).eq('id', id);
-      return true;
-    } catch (e) {
-      print("❌ Recommendation update error: $e");
-      return false;
-    }
-  }
-  /// ===============================
-  /// 📥 FETCH DETECTIONS (WITH REVIEW)
+  /// 📥 FETCH ALL DETECTIONS
   /// ===============================
   Future<List<Map<String, dynamic>>> fetchDetections() async {
     try {
@@ -94,15 +59,157 @@ class SupabaseService {
   }
 
   /// ===============================
+  /// 🔥 FETCH ONLY PENDING
+  /// ===============================
+  Future<List<Map<String, dynamic>>> fetchPendingDetections() async {
+    try {
+      final response = await client
+          .from('detections')
+          .select()
+          .or('is_reviewed.eq.false,is_reviewed.is.null')
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Pending fetch error: $e");
+      return [];
+    }
+  }
+
+  /// ===============================
+  /// 📥 PAGINATION
+  /// ===============================
+  Future<List<Map<String, dynamic>>> fetchDetectionsPaginated(
+    int limit,
+    int offset,
+  ) async {
+    try {
+      final response = await client
+          .from('detections')
+          .select()
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Pagination error: $e");
+      return [];
+    }
+  }
+
+  /// ===============================
+  /// 🧠 🔥 FIXED DETECTION REVIEW UPDATE
+  /// ===============================
+  Future<bool> updateDetectionReview(
+    String detectionId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      print("📡 Updating detection ID: $detectionId");
+      print("📦 Raw payload: $data");
+
+      // ===============================
+      // 🔥 FIX: NORMALIZE FIELD NAMES
+      // ===============================
+      final safeData = Map<String, dynamic>.from(data);
+
+      // Fix severity mismatch
+      if (safeData.containsKey("severity")) {
+        safeData["severity_level"] = safeData["severity"];
+        safeData.remove("severity");
+      }
+
+      // Ensure boolean correctness
+      if (safeData.containsKey("is_reviewed")) {
+        safeData["is_reviewed"] =
+            safeData["is_reviewed"] == true;
+      }
+
+      final response = await client
+          .from('detections')
+          .update({
+            ...safeData,
+            "updated_at": DateTime.now().toIso8601String(),
+          })
+          .eq('id', detectionId)
+          .select(); // 🔥 IMPORTANT FOR VERIFICATION
+
+      print("📦 Supabase response: $response");
+
+      if (response.isEmpty) {
+        print("❌ UPDATE FAILED: No row matched or RLS issue");
+        return false;
+      }
+
+      print("✅ UPDATE SUCCESS");
+      return true;
+    } catch (e) {
+      print("❌ Review update error: $e");
+      return false;
+    }
+  }
+
+  /// ===============================
+  /// 🗑 DELETE DETECTION
+  /// ===============================
+  Future<bool> deleteDetection(String id) async {
+    try {
+      await client.from('detections').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print("❌ Delete error: $e");
+      return false;
+    }
+  }
+
+  /// ===============================
+  /// 🗑 DELETE IMAGE
+  /// ===============================
+  Future<bool> deleteImageFromStorage(String imageUrl) async {
+    try {
+      final uri = Uri.parse(imageUrl);
+
+      final path = uri.pathSegments
+          .skipWhile((e) => e != 'coffee-images')
+          .skip(1)
+          .join('/');
+
+      await client.storage.from('coffee-images').remove([path]);
+
+      return true;
+    } catch (e) {
+      print("❌ Storage delete error: $e");
+      return false;
+    }
+  }
+
+  /// ===============================
+  /// 📥 UPDATE RECOMMENDATION
+  /// ===============================
+  Future<bool> updateRecommendation(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      await client.from('recommendations').update(data).eq('id', id);
+      return true;
+    } catch (e) {
+      print("❌ Recommendation update error: $e");
+      return false;
+    }
+  }
+
+  /// ===============================
   /// 💡 GET RECOMMENDATION BY DISEASE
   /// ===============================
-  Future<Map<String, dynamic>?> getRecommendationByDisease(String disease) async {
+  Future<Map<String, dynamic>?> getRecommendationByDisease(
+    String disease,
+  ) async {
     try {
       final response = await client
           .from('recommendations')
           .select()
           .ilike('disease_label', disease)
-          .order('updated_at', ascending: false)
           .limit(1)
           .maybeSingle();
 
@@ -129,23 +236,26 @@ class SupabaseService {
       return [];
     }
   }
-    /// ===============================
-    /// 🔐 LOGIN USER (ROLE BASED)
-    /// ===============================
-    Future<Map<String, dynamic>?> loginUser(String email, String password) async {
-      try {
-        final response = await client
-            .from('users')
-            .select()
-            .eq('email', email)
-            .eq('password', password)
-            .maybeSingle();
 
-        return response;
-      } catch (e) {
-        print("❌ Login error: $e");
-        return null;
-      }
+  /// ===============================
+  /// 🔐 LOGIN USER
+  /// ===============================
+  Future<Map<String, dynamic>?> loginUser(
+    String email,
+    String password,
+  ) async {
+    try {
+      final response = await client
+          .from('users')
+          .select()
+          .eq('email', email)
+          .eq('password', password)
+          .maybeSingle();
+
+      return response;
+    } catch (e) {
+      print("❌ Login error: $e");
+      return null;
     }
-
+  }
 }
