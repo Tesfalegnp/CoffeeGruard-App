@@ -1,28 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/supabase_config.dart';
 import 'core/services/hive_service.dart';
 import 'core/services/recommendation_service.dart';
+
+// Providers
+import 'providers/admin_provider.dart';
+
+// Screens
 import 'screens/home/hero_home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load ENV variables
+  // ===============================
+  // 🌱 LOAD ENV
+  // ===============================
   await dotenv.load(fileName: ".env");
 
-  // Initialize Supabase
+  // ===============================
+  // ☁ INIT SUPABASE
+  // ===============================
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
 
-  // Initialize Hive (offline storage)
+  // ===============================
+  // 💾 INIT HIVE
+  // ===============================
   await HiveService.init();
 
-  // Sync recommendations from Supabase → Hive
+  // ===============================
+  // 🔄 SYNC RECOMMENDATIONS
+  // ===============================
   try {
     await RecommendationService().syncRecommendations();
     debugPrint("✅ Recommendations synced successfully");
@@ -30,6 +44,9 @@ Future<void> main() async {
     debugPrint("⚠️ Recommendation sync failed: $e");
   }
 
+  // ===============================
+  // 🚀 RUN APP WITH PROVIDERS
+  // ===============================
   runApp(const CoffeeGuardApp());
 }
 
@@ -38,13 +55,40 @@ class CoffeeGuardApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'CoffeeGuard',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.green,
+    return MultiProvider(
+      providers: [
+
+        // ===============================
+        // 👨‍💼 ADMIN PROVIDER
+        // ===============================
+        ChangeNotifierProvider(
+          create: (_) => AdminProvider(),
+        ),
+
+        // 👉 (NEXT STEPS)
+        // You will add more providers here:
+        // DetectionProvider()
+        // AuthProvider()
+        // SyncProvider()
+
+      ],
+      child: MaterialApp(
+        title: 'CoffeeGuard',
+        debugShowCheckedModeBanner: false,
+
+        theme: ThemeData(
+          primarySwatch: Colors.green,
+          appBarTheme: const AppBarTheme(
+            elevation: 0,
+            centerTitle: true,
+          ),
+        ),
+
+        // ===============================
+        // 🏠 START SCREEN
+        // ===============================
+        home: const HeroHomeScreen(),
       ),
-      home: const HeroHomeScreen(), // 🚀 Directly open Hero page
     );
   }
 }

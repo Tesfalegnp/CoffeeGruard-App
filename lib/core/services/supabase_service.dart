@@ -4,9 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseService {
   final client = Supabase.instance.client;
 
-  /// ===============================
-  /// 📸 UPLOAD IMAGE
-  /// ===============================
+  // ===============================
+  // 📸 UPLOAD IMAGE
+  // ===============================
   Future<String?> uploadImage(File file, String fileName) async {
     try {
       final path = "uploads/$fileName";
@@ -27,9 +27,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// ☁ INSERT DETECTION
-  /// ===============================
+  // ===============================
+  // ☁ INSERT DETECTION
+  // ===============================
   Future<bool> insertDetection(Map<String, dynamic> data) async {
     try {
       await client.from('detections').insert(data);
@@ -41,9 +41,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 📥 FETCH ALL DETECTIONS
-  /// ===============================
+  // ===============================
+  // 📥 FETCH ALL DETECTIONS
+  // ===============================
   Future<List<Map<String, dynamic>>> fetchDetections() async {
     try {
       final response = await client
@@ -58,9 +58,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 🔥 FETCH ONLY PENDING
-  /// ===============================
+  // ===============================
+  // 🔥 FETCH ONLY PENDING
+  // ===============================
   Future<List<Map<String, dynamic>>> fetchPendingDetections() async {
     try {
       final response = await client
@@ -76,9 +76,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 📥 PAGINATION
-  /// ===============================
+  // ===============================
+  // 📥 PAGINATION
+  // ===============================
   Future<List<Map<String, dynamic>>> fetchDetectionsPaginated(
     int limit,
     int offset,
@@ -97,9 +97,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 🧠 🔥 FIXED DETECTION REVIEW UPDATE
-  /// ===============================
+  // ===============================
+  // 🧠 🔥 FIXED DETECTION REVIEW UPDATE
+  // ===============================
   Future<bool> updateDetectionReview(
     String detectionId,
     Map<String, dynamic> data,
@@ -108,18 +108,14 @@ class SupabaseService {
       print("📡 Updating detection ID: $detectionId");
       print("📦 Raw payload: $data");
 
-      // ===============================
-      // 🔥 FIX: NORMALIZE FIELD NAMES
-      // ===============================
       final safeData = Map<String, dynamic>.from(data);
 
-      // Fix severity mismatch
+      // FIX: normalize severity
       if (safeData.containsKey("severity")) {
         safeData["severity_level"] = safeData["severity"];
         safeData.remove("severity");
       }
 
-      // Ensure boolean correctness
       if (safeData.containsKey("is_reviewed")) {
         safeData["is_reviewed"] =
             safeData["is_reviewed"] == true;
@@ -132,7 +128,7 @@ class SupabaseService {
             "updated_at": DateTime.now().toIso8601String(),
           })
           .eq('id', detectionId)
-          .select(); // 🔥 IMPORTANT FOR VERIFICATION
+          .select();
 
       print("📦 Supabase response: $response");
 
@@ -149,9 +145,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 🗑 DELETE DETECTION
-  /// ===============================
+  // ===============================
+  // 🗑 DELETE DETECTION
+  // ===============================
   Future<bool> deleteDetection(String id) async {
     try {
       await client.from('detections').delete().eq('id', id);
@@ -162,9 +158,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 🗑 DELETE IMAGE
-  /// ===============================
+  // ===============================
+  // 🗑 DELETE IMAGE
+  // ===============================
   Future<bool> deleteImageFromStorage(String imageUrl) async {
     try {
       final uri = Uri.parse(imageUrl);
@@ -183,9 +179,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 📥 UPDATE RECOMMENDATION
-  /// ===============================
+  // ===============================
+  // 📥 UPDATE RECOMMENDATION
+  // ===============================
   Future<bool> updateRecommendation(
     String id,
     Map<String, dynamic> data,
@@ -199,9 +195,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 💡 GET RECOMMENDATION BY DISEASE
-  /// ===============================
+  // ===============================
+  // 💡 GET RECOMMENDATION BY DISEASE
+  // ===============================
   Future<Map<String, dynamic>?> getRecommendationByDisease(
     String disease,
   ) async {
@@ -220,9 +216,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 📥 GET ALL RECOMMENDATIONS
-  /// ===============================
+  // ===============================
+  // 📥 GET ALL RECOMMENDATIONS
+  // ===============================
   Future<List<Map<String, dynamic>>> getAllRecommendations() async {
     try {
       final response = await client
@@ -237,9 +233,9 @@ class SupabaseService {
     }
   }
 
-  /// ===============================
-  /// 🔐 LOGIN USER
-  /// ===============================
+  // ===============================
+  // 🔐 LOGIN USER
+  // ===============================
   Future<Map<String, dynamic>?> loginUser(
     String email,
     String password,
@@ -256,6 +252,81 @@ class SupabaseService {
     } catch (e) {
       print("❌ Login error: $e");
       return null;
+    }
+  }
+
+  // =====================================================
+  // 👥 USER MANAGEMENT (ADMIN)
+  // =====================================================
+
+  Future<List<Map<String, dynamic>>> fetchUsers() async {
+    try {
+      final response = await client
+          .from('users')
+          .select()
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Fetch users error: $e");
+      return [];
+    }
+  }
+
+  Future<bool> createUser(Map<String, dynamic> data) async {
+    try {
+      await client.from('users').insert(data);
+      return true;
+    } catch (e) {
+      print("❌ Create user error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> updateUser(String id, Map<String, dynamic> data) async {
+    try {
+      final response = await client
+          .from('users')
+          .update({
+            ...data,
+            "updated_at": DateTime.now().toIso8601String(),
+          })
+          .eq('id', id)
+          .select();
+
+      return response.isNotEmpty;
+    } catch (e) {
+      print("❌ Update user error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> deleteUser(String id) async {
+    try {
+      await client.from('users').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      print("❌ Delete user error: $e");
+      return false;
+    }
+  }
+
+  // =====================================================
+  // 🧠 MODEL MONITORING (FIXED + REQUIRED)
+  // =====================================================
+
+  Future<List<Map<String, dynamic>>> fetchModelEvaluationData() async {
+    try {
+      final response = await client
+          .from('detections')
+          .select()
+          .eq('is_reviewed', true)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("❌ Model evaluation fetch error: $e");
+      return [];
     }
   }
 }
