@@ -23,8 +23,16 @@ class RecommendationModel extends HiveObject {
   @HiveField(5)
   String priority;
 
+
   @HiveField(6)
   DateTime? updatedAt;
+
+  ///AMHARIC SUPPORT
+  @HiveField(7)
+  String? titleAm;
+
+  @HiveField(8)
+  String? contentAm;
 
   RecommendationModel({
     required this.id,
@@ -34,5 +42,8 @@ class RecommendationModel extends HiveObject {
     required this.content,
     required this.priority,
     this.updatedAt,
+    //  NEW
+    this.titleAm,
+    this.contentAm,
   });
 }

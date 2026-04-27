@@ -216,4 +216,24 @@ class HiveService {
       print("❌ clearUserSession error: $e");
     }
   }
+  // =====================================================
+// 👤 UPDATE LOCAL USER PROFILE (ADD ONLY 🔥)
+// =====================================================
+static Future<void> updateCurrentUser(UserModel updated) async {
+  try {
+    final box = Hive.box(sessionBox);
+
+    await box.put(sessionKey, updated);
+
+    print("✅ Local profile updated");
+
+    /// background sync
+    Future.microtask(() async {
+      await SyncService().syncUserProfile();
+    });
+
+  } catch (e) {
+    print("❌ updateCurrentUser error: $e");
+  }
+}
 }

@@ -25,13 +25,23 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       specialization: fields[5] as String?,
       phone: fields[6] as String?,
       avatarUrl: fields[7] as String?,
+      isActive: fields[8] as bool?,
+      adminLevel: fields[9] as int?,
+      farmLocation: fields[10] as String?,
+      farmSize: fields[11] as double?,
+      crops: fields[12] as String?,
+      expertise: fields[13] as String?,
+      yearsExperience: fields[14] as int?,
+      organization: fields[15] as String?,
+      lastLogin: fields[16] as DateTime?,
+      updatedAt: fields[17] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserModel obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +57,27 @@ class UserModelAdapter extends TypeAdapter<UserModel> {
       ..writeByte(6)
       ..write(obj.phone)
       ..writeByte(7)
-      ..write(obj.avatarUrl);
+      ..write(obj.avatarUrl)
+      ..writeByte(8)
+      ..write(obj.isActive)
+      ..writeByte(9)
+      ..write(obj.adminLevel)
+      ..writeByte(10)
+      ..write(obj.farmLocation)
+      ..writeByte(11)
+      ..write(obj.farmSize)
+      ..writeByte(12)
+      ..write(obj.crops)
+      ..writeByte(13)
+      ..write(obj.expertise)
+      ..writeByte(14)
+      ..write(obj.yearsExperience)
+      ..writeByte(15)
+      ..write(obj.organization)
+      ..writeByte(16)
+      ..write(obj.lastLogin)
+      ..writeByte(17)
+      ..write(obj.updatedAt);
   }
 
   @override

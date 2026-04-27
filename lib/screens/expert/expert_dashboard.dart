@@ -10,7 +10,7 @@ import 'model_performance_screen.dart';
 import 'image_gallery_screen.dart';
 import 'expert_settings_screen.dart';
 import 'expert_guide_screen.dart';
-
+import 'expert_profile_screen.dart';
 import '../auth/login_screen.dart';
 
 class ExpertDashboard extends StatefulWidget {
@@ -131,7 +131,14 @@ class _ExpertDashboardState extends State<ExpertDashboard>
                       spacing: 12,
                       runSpacing: 12,
                       children: [
-
+                          _btn("Profile", Icons.person, Colors.indigo, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ExpertProfileScreen(),
+                                ),
+                              );
+                            }),
                         _btn("Queue", Icons.task, Colors.blue, () {
                           Navigator.push(context,
                               MaterialPageRoute(builder: (_) => const ExpertQueueScreen()))
@@ -303,7 +310,18 @@ class _ExpertDashboardState extends State<ExpertDashboard>
             title: const Text("Dashboard"),
             onTap: () => Navigator.pop(context),
           ),
-
+          ListTile(
+            leading: const Icon(Icons.person, color: Colors.indigo),
+            title: const Text("Profile"),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ExpertProfileScreen(),
+                ),
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.task, color: Colors.blue),
             title: const Text("Queue"),

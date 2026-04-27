@@ -329,4 +329,43 @@ class SupabaseService {
       return [];
     }
   }
+         // =====================================================
+// 👤 ADMIN PROFILE (ADD ONLY 🔥)
+// =====================================================
+
+Future<Map<String, dynamic>?> fetchUserById(String id) async {
+  try {
+    final response = await client
+        .from('users')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+
+    return response;
+  } catch (e) {
+    print("❌ fetchUserById error: $e");
+    return null;
+  }
+}
+
+Future<bool> updateUserProfile(
+  String id,
+  Map<String, dynamic> data,
+) async {
+  try {
+    final response = await client
+        .from('users')
+        .update({
+          ...data,
+          "updated_at": DateTime.now().toIso8601String(),
+        })
+        .eq('id', id)
+        .select();
+
+    return response.isNotEmpty;
+  } catch (e) {
+    print("❌ updateUserProfile error: $e");
+    return false;
+  }
+}
 }

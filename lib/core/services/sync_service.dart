@@ -216,4 +216,30 @@ class SyncService {
   Future<List<DetectionResultModel>> refreshExpertQueue() async {
     return await pullExpertDetections();
   }
+      // =====================================================
+// 👤 SYNC USER PROFILE (ADD ONLY 🔥)
+// =====================================================
+Future<void> syncUserProfile() async {
+  try {
+    final user = HiveService.getCurrentUser();
+    if (user == null) return;
+
+    final success = await supabaseService.updateUserProfile(
+      user.id,
+      {
+        "full_name": user.fullName,
+        "phone": user.phone,
+        "avatar_url": user.avatarUrl,
+      },
+    );
+
+    if (success) {
+      print("✅ Profile synced to server");
+    } else {
+      print("⚠️ Sync failed, will retry later");
+    }
+  } catch (e) {
+    print("❌ Profile sync error: $e");
+   }
+}
 }

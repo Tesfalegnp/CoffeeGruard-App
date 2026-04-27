@@ -31,7 +31,7 @@ class DetectionService {
 
       /// ❌ Stage 1 failed
       if (result["success"] == false) {
-        print("❌ Not a coffee leaf");
+        print("Sorry it's Not a coffee leaf, Please try again with a clear image of a coffee leaf");
 
         return {
           "success": false,
@@ -57,7 +57,7 @@ class DetectionService {
 
       /// ⚠️ TEMP: default severity
       String severity = "medium";
-
+        RecommendationModel? recommendationModel;
       try {
         /// 1️⃣ Try LOCAL (Hive) FIRST
         final RecommendationModel? localRec =
@@ -67,6 +67,7 @@ class DetectionService {
           print("📦 Using LOCAL recommendation");
 
           recommendationText = localRec.content;
+          recommendationModel = localRec;
         } else {
           print("🌐 No local recommendation, fetching ONLINE...");
 
@@ -76,6 +77,21 @@ class DetectionService {
 
           if (rec != null && rec["content"] != null) {
             recommendationText = rec["content"];
+
+            /// 🆕 CREATE MODEL FROM API
+            recommendationModel = RecommendationModel(
+              id: rec["id"],
+              diseaseLabel: rec["disease_label"],
+              severity: rec["severity"],
+              title: rec["title"],
+              content: rec["content"],
+              titleAm: rec["title_am"],
+              contentAm: rec["content_am"],
+              priority: rec["priority"] ?? "medium",
+              updatedAt: rec["updated_at"] != null
+                  ? DateTime.parse(rec["updated_at"])
+                  : null,
+            );
           }
         }
       } catch (e) {
@@ -113,6 +129,7 @@ class DetectionService {
         "disease": disease,
         "diseaseConfidence": confidence,
         "recommendation": recommendationText,
+        "recommendationModel": recommendationModel,
       };
 
     } catch (e) {

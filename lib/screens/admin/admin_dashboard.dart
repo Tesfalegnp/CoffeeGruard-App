@@ -9,6 +9,7 @@ import 'detection_management_screen.dart';
 import 'system_settings_screen.dart';
 import 'review_audit_screen.dart';
 import 'admin_guide_screen.dart';
+import 'admin_profile_screen.dart'; // ✅ ADDED
 
 // Navigation targets
 import '../auth/login_screen.dart';
@@ -63,6 +64,14 @@ class _AdminDashboardState extends State<AdminDashboard>
         title: const Text("Admin Control Center"),
         backgroundColor: Colors.green,
         actions: [
+          // ✅ ADDED PROFILE ICON
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              _nav(const AdminProfileScreen());
+            },
+          ),
+
           IconButton(
             icon: const Icon(Icons.menu_book),
             onPressed: () {
@@ -132,12 +141,10 @@ class _AdminDashboardState extends State<AdminDashboard>
                   _nav(const AdminGuideScreen());
                 }),
 
-                // ✅ NEW BUTTON 1
                 _btn("Farmer Home", Icons.home, Colors.brown, () {
                   _nav(const HeroHomeScreen());
                 }),
 
-                // ✅ NEW BUTTON 2
                 _btn("Expert Panel", Icons.dashboard, Colors.deepPurple, () {
                   _nav(const ExpertDashboard());
                 }),

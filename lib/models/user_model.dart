@@ -29,6 +29,40 @@ class UserModel extends HiveObject {
   @HiveField(7)
   String? avatarUrl;
 
+  // ================================
+  // ✅ ADDED FIELDS (FROM SUPABASE)
+  // ================================
+
+  @HiveField(8)
+  bool? isActive;
+
+  @HiveField(9)
+  int? adminLevel;
+
+  @HiveField(10)
+  String? farmLocation;
+
+  @HiveField(11)
+  double? farmSize;
+
+  @HiveField(12)
+  String? crops;
+
+  @HiveField(13)
+  String? expertise;
+
+  @HiveField(14)
+  int? yearsExperience;
+
+  @HiveField(15)
+  String? organization;
+
+  @HiveField(16)
+  DateTime? lastLogin;
+
+  @HiveField(17)
+  DateTime? updatedAt;
+
   UserModel({
     required this.id,
     required this.email,
@@ -38,5 +72,17 @@ class UserModel extends HiveObject {
     this.specialization,
     this.phone,
     this.avatarUrl,
+
+    // defaults safe for backward compatibility
+    this.isActive,
+    this.adminLevel,
+    this.farmLocation,
+    this.farmSize,
+    this.crops,
+    this.expertise,
+    this.yearsExperience,
+    this.organization,
+    this.lastLogin,
+    this.updatedAt,
   });
 }

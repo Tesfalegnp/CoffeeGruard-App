@@ -19,16 +19,21 @@ class RecommendationService {
     final list = data.map((e) {
 
       return RecommendationModel(
-        id: e['id'],
-        diseaseLabel: e['disease_label'],
-        severity: e['severity'],
-        title: e['title'],
-        content: e['content'],
-        priority: e['priority'] ?? 'medium',
-        updatedAt: e['updated_at'] != null
-            ? DateTime.parse(e['updated_at'])
-            : null,
-      );
+      id: e['id'],
+      diseaseLabel: e['disease_label'],
+      severity: e['severity'],
+      title: e['title'],
+      content: e['content'],
+
+      /// 🆕 ADD THESE 2 LINES
+      titleAm: e['title_am'],
+      contentAm: e['content_am'],
+
+      priority: e['priority'] ?? 'medium',
+      updatedAt: e['updated_at'] != null
+          ? DateTime.parse(e['updated_at'])
+          : null,
+    );
 
     }).toList();
 
