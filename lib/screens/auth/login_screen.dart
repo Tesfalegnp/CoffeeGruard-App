@@ -398,8 +398,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         Expanded(
                                           child: Text(
                                             isAmharic 
-                                                ? "የሙከራ መለያ: farmer@example.com / ይለፍ ቃል: 123456"
-                                                : "Demo: farmer@example.com / 123456",
+                                                ? "የሙከራ መለያ: UserName: sample@example.com / ይለፍ ቃል: Password: ******"
+                                                : "Demo: UserName: sample@example.com / Password: ******",
                                             style: TextStyle(
                                               fontSize: 11,
                                               color: Colors.blue.shade700,
