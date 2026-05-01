@@ -1,42 +1,44 @@
+import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/recommendation_model.dart';
 import 'hive_service.dart';
 
 class RecommendationService {
-
   final supabase = Supabase.instance.client;
 
-  /// 🔄 Download from Supabase → save locally
   Future<void> syncRecommendations() async {
+    try {
+      final response = await supabase
+          .from('recommendations')
+          .select();
 
-    final response = await supabase
-        .from('recommendations')
-        .select();
+      final data = response as List;
 
-    final data = response as List;
+      final list = data.map((e) {
+        return RecommendationModel(
+          id: e['id'],
+          diseaseLabel: e['disease_label'],
+          severity: e['severity'],
+          title: e['title'],
+          content: e['content'],
+          titleAm: e['title_am'],
+          contentAm: e['content_am'],
+          titleOm: e['title_om'],
+          contentOm: e['content_om'],
+          priority: e['priority'] ?? 'medium',
+          updatedAt: e['updated_at'] != null
+              ? DateTime.parse(e['updated_at'])
+              : null,
+        );
+      }).toList();
 
-    final list = data.map((e) {
+      await HiveService.saveRecommendations(list);
 
-      return RecommendationModel(
-      id: e['id'],
-      diseaseLabel: e['disease_label'],
-      severity: e['severity'],
-      title: e['title'],
-      content: e['content'],
-
-      /// 🆕 ADD THESE 2 LINES
-      titleAm: e['title_am'],
-      contentAm: e['content_am'],
-
-      priority: e['priority'] ?? 'medium',
-      updatedAt: e['updated_at'] != null
-          ? DateTime.parse(e['updated_at'])
-          : null,
-    );
-
-    }).toList();
-
-    await HiveService.saveRecommendations(list);
+      debugPrint("Synced ${list.length} recommendations");
+    } catch (e) {
+      debugPrint("Sync Error: $e");
+    }
   }
 }
