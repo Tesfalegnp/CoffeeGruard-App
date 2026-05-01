@@ -111,7 +111,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> {
     if (result["success"] == false) {
       setState(() {
         isProcessing = false;
-        disease = "Detection Failed";
+        disease = "Sorry, This is Not a Coffee Leaf";
         recommendation = result["message"];
       });
       _startTyping(recommendation ?? "");

@@ -44,7 +44,7 @@ class CoffeeDetector {
 
       return {
         "success": false,
-        "message": "❌ Not a Coffee Leaf",
+        "message": "Please provide a clear image of a coffee leaf for accurate detection.",
         "confidence": (verifyProb * 100).toStringAsFixed(2)
       };
 
@@ -60,7 +60,7 @@ class CoffeeDetector {
 
       return {
         "success": true,
-        "disease": "Rust",
+        "disease": "Rust Disease",
         "confidence": (rustProb * 100).toStringAsFixed(2)
       };
 
@@ -68,7 +68,7 @@ class CoffeeDetector {
 
       return {
         "success": true,
-        "disease": "Healthy",
+        "disease": "Healthy Leaf",
         "confidence": ((1 - rustProb) * 100).toStringAsFixed(2)
       };
 
