@@ -15,7 +15,9 @@ import '../../core/services/hive_service.dart';
 import '../../models/user_model.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/theme_provider.dart';
+
 import '../detection/history_screen.dart';
+
 import 'widgets/result_card.dart';
 import 'widgets/role_drawer.dart';
 import 'widgets/language_selector.dart';
@@ -31,16 +33,20 @@ class HeroHomeScreen extends StatefulWidget {
 class _HeroHomeScreenState extends State<HeroHomeScreen>
     with TickerProviderStateMixin {
   final DetectionService detectionService = DetectionService();
-  final RecommendationService recommendationService = RecommendationService();
+  final RecommendationService recommendationService =
+      RecommendationService();
   final SyncService syncService = SyncService();
   final FlutterTts tts = FlutterTts();
 
-  late AnimationController _pulseController;
-  late AnimationController _slideController;
-  late Animation<double> _pulseAnimation;
-  late Animation<Offset> _slideAnimation;
-
   final ScrollController _scrollController = ScrollController();
+
+  late AnimationController _pulseController;
+  late AnimationController _floatController;
+  late AnimationController _fadeController;
+
+  late Animation<double> _pulseAnimation;
+  late Animation<double> _floatAnimation;
+  late Animation<double> _fadeAnimation;
 
   File? selectedImage;
 
@@ -57,88 +63,122 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
 
   UserModel? currentUser;
 
+  // =====================================================
+  // INIT
+  // =====================================================
   @override
   void initState() {
     super.initState();
-    
-    // Initialize animations
+
+    currentUser = HiveService.getCurrentUser();
+
+    detectionService.init();
+
+    _initTTS();
+    _preloadRecommendations();
+
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    
-    _slideController = AnimationController(
+
+    _floatController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+
+    _pulseAnimation =
+        Tween<double>(begin: 0.95, end: 1.08).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
     );
-    
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+
+    _floatAnimation =
+        Tween<double>(begin: -8, end: 8).animate(
+      CurvedAnimation(
+        parent: _floatController,
+        curve: Curves.easeInOut,
+      ),
     );
-    
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
-    
-    detectionService.init();
-    currentUser = HiveService.getCurrentUser();
-    _initTTS();
-    
-    _slideController.forward();
-    
-    // Pre-load recommendations on startup
-    _preloadRecommendations();
+
+    _fadeAnimation =
+        CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeIn,
+    );
   }
-  
+
   Future<void> _preloadRecommendations() async {
     await recommendationService.syncRecommendations();
   }
 
-  /// =========================
-  /// 🔊 TEXT TO SPEECH SETUP
-  /// =========================
-  void _initTTS() async {
-    await tts.setSpeechRate(0.5);
+  Future<void> _initTTS() async {
+    await tts.setSpeechRate(0.45);
     await tts.setPitch(1.0);
   }
 
+  // =====================================================
+  // LANGUAGE TEXTS
+  // =====================================================
+
+  String tr(
+    String en,
+    String am,
+    String om,
+    String code,
+  ) {
+    if (code == "am") return am;
+    if (code == "om") return om;
+    return en;
+  }
+
+  // =====================================================
+  // SPEAK
+  // =====================================================
+
   Future<void> _speak(String text) async {
-    if (!mounted) return;
+    final code =
+        Provider.of<LanguageProvider>(
+          context,
+          listen: false,
+        ).code;
 
-    final lang = Provider.of<LanguageProvider>(
-      context,
-      listen: false,
-    ).code;
-
-    switch (lang) {
-      case "am":
-        await tts.setLanguage("am-ET");
-        break;
-      case "om":
-        await tts.setLanguage("en-US");
-        break;
-      default:
-        await tts.setLanguage("en-US");
+    if (code == "am") {
+      await tts.setLanguage("am-ET");
+    } else {
+      await tts.setLanguage("en-US");
     }
 
     setState(() => isSpeaking = true);
+
     await tts.speak(text);
   }
 
   Future<void> _stopSpeak() async {
     await tts.stop();
-    setState(() => isSpeaking = false);
+
+    if (mounted) {
+      setState(() => isSpeaking = false);
+    }
   }
 
-  /// =========================
-  /// 📸 IMAGE PROCESSING
-  /// =========================
+  // =====================================================
+  // HANDLE IMAGE
+  // =====================================================
+
   Future<void> handleImage(File image) async {
-    final lang = Provider.of<LanguageProvider>(
-      context,
-      listen: false,
-    ).code;
+    final code =
+        Provider.of<LanguageProvider>(
+          context,
+          listen: false,
+        ).code;
 
     _typingTimer?.cancel();
     await _stopSpeak();
@@ -152,12 +192,19 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
       isCoffeeLeaf = true;
     });
 
-    final result = await detectionService.runDetection(image);
+    final result =
+        await detectionService.runDetection(image);
 
     if (result["success"] == false) {
       setState(() {
         isProcessing = false;
-        disease = "Detection Failed";
+        disease = tr(
+          "Detection Failed",
+          "ምርመራ አልተሳካም",
+          "Qorannoon hin milkoofne",
+          code,
+        );
+
         recommendation = result["message"];
       });
 
@@ -166,20 +213,33 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
     }
 
     final detectedDisease = result["disease"];
-    final detectedConfidence = result["diseaseConfidence"];
+    final detectedConfidence =
+        result["diseaseConfidence"];
 
-    /// ❌ Not coffee leaf
-    if (detectedDisease.toLowerCase().contains("not") ||
-        detectedDisease.toLowerCase().contains("unknown")) {
+    if (detectedDisease
+            .toLowerCase()
+            .contains("not") ||
+        detectedDisease
+            .toLowerCase()
+            .contains("unknown")) {
       setState(() {
         isCoffeeLeaf = false;
-        disease = "Not a Coffee Leaf";
         confidence = detectedConfidence;
-        recommendation = lang == 'am' 
-            ? "እባክዎ በተፈጥሮ ብርሃን ስር ግልጽ የሆነ የቡና ቅጠል ይቅረጹ"
-            : lang == 'om'
-            ? "Maaloo suuraa baala bunaa ifa uumamaa keessatti ifa ta'e fudhadhu"
-            : "Please capture a clear coffee leaf under natural light";
+
+        disease = tr(
+          "Not Coffee Leaf",
+          "የቡና ቅጠል አይደለም",
+          "Baala buna miti",
+          code,
+        );
+
+        recommendation = tr(
+          "Please select clear coffee leaf image.",
+          "እባክዎ ግልጽ የቡና ቅጠል ፎቶ ይምረጡ።",
+          "Maaloo suuraa baala bunaa qulqulluu filadhu.",
+          code,
+        );
+
         isProcessing = false;
       });
 
@@ -187,14 +247,15 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
       return;
     }
 
-    /// 🌍 GET RECOMMENDATION (USES LOCAL CACHE FIRST)
-    final rec = await recommendationService.getRecommendation(
+    final rec =
+        await recommendationService.getRecommendation(
       diseaseLabel: detectedDisease,
-      languageCode: lang,
+      languageCode: code,
     );
 
-    /// 🌐 SYNC IF ONLINE
-    final net = await Connectivity().checkConnectivity();
+    final net =
+        await Connectivity().checkConnectivity();
+
     if (net != ConnectivityResult.none) {
       syncService.syncDetections();
     }
@@ -209,18 +270,23 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
     _typeText(rec);
   }
 
-  /// =========================
-  /// ⌨ TYPEWRITER EFFECT
-  /// =========================
+  // =====================================================
+  // TYPE WRITER
+  // =====================================================
+
   void _typeText(String text) {
     displayedText = "";
+
     int i = 0;
 
     _typingTimer = Timer.periodic(
-      const Duration(milliseconds: 20),
+      const Duration(milliseconds: 18),
       (timer) {
         if (i < text.length) {
-          setState(() => displayedText += text[i]);
+          setState(() {
+            displayedText += text[i];
+          });
+
           i++;
         } else {
           timer.cancel();
@@ -229,252 +295,691 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
     );
   }
 
-  /// =========================
-  /// 🔄 RESET
-  /// =========================
-  void _reset() async {
+  // =====================================================
+  // RESET
+  // =====================================================
+
+  Future<void> _reset() async {
     _typingTimer?.cancel();
     await _stopSpeak();
 
     setState(() {
       selectedImage = null;
+      isProcessing = false;
       disease = "";
-      confidence = 0.0;
+      confidence = 0;
       recommendation = "";
       displayedText = "";
-      isProcessing = false;
     });
   }
+
+  // =====================================================
+  // DISPOSE
+  // =====================================================
 
   @override
   void dispose() {
     _typingTimer?.cancel();
-    _pulseController.dispose();
-    _slideController.dispose();
+
     _scrollController.dispose();
+
+    _pulseController.dispose();
+    _floatController.dispose();
+    _fadeController.dispose();
+
     tts.stop();
+
     super.dispose();
   }
 
-  /// =========================
-  /// 🏠 UI with Attractive Design
-  /// =========================
+  // =====================================================
+  // BUILD
+  // =====================================================
+
   @override
   Widget build(BuildContext context) {
-    final langProvider = context.watch<LanguageProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final isDark = themeProvider.currentTheme == AppThemeMode.dark;
-    
-    String titleText = "CoffeeGuard";
-    String subtitleText = "Protect your coffee plants";
-    
-    if (langProvider.code == 'am') {
-      titleText = "ቡናጋርድ";
-      subtitleText = "የቡና ተክሎችዎን ይጠብቁ";
-    } else if (langProvider.code == 'om') {
-      titleText = "BunaGuard";
-      subtitleText = "Buna keessan eegaa";
-    }
+    final lang =
+        context.watch<LanguageProvider>();
+
+    final theme =
+        context.watch<ThemeProvider>();
+
+    final code = lang.code;
+
+    final isDark =
+        theme.currentTheme ==
+            AppThemeMode.dark;
+
+    final bg =
+        isDark
+            ? const Color(0xff101513)
+            : Colors.grey.shade100;
+
+    final card =
+        isDark
+            ? const Color(0xff1b221f)
+            : Colors.white;
+
+    final txt =
+        isDark
+            ? Colors.white
+            : Colors.black87;
 
     return Scaffold(
-      drawer: RoleDrawer(currentUser: currentUser),
+      backgroundColor: bg,
+
+      drawer:
+          RoleDrawer(
+            currentUser: currentUser,
+          ),
+
       appBar: AppBar(
+        elevation: 0,
+        centerTitle: true,
+        backgroundColor:
+            Colors.green.shade700,
+
         title: Column(
           children: [
             Text(
-              titleText,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              tr(
+                "CoffeeGuard",
+                "ቡናጋርድ",
+                "BunaGuard",
+                code,
+              ),
+              style: const TextStyle(
+                fontWeight:
+                    FontWeight.bold,
+              ),
             ),
             Text(
-              subtitleText,
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.normal),
+              tr(
+                "Protect coffee plants",
+                "የቡና ተክል ጥበቃ",
+                "Buna eegi",
+                code,
+              ),
+              style:
+                  const TextStyle(
+                fontSize: 11,
+              ),
             ),
           ],
         ),
-        backgroundColor: Colors.green.shade700,
-        centerTitle: true,
+
         actions: const [
           ThemeSelector(),
           LanguageSelector(),
         ],
       ),
-      body: SlideTransition(
-        position: _slideAnimation,
+
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+
         child: SingleChildScrollView(
-          controller: _scrollController,
+          controller:
+              _scrollController,
+
           child: Column(
             children: [
-              /// Hero Animated Header
+              // =================================================
+              // HERO HEADER
+              // =================================================
               Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.all(
+                  20,
+                ),
+
+                decoration:
+                    BoxDecoration(
+                  gradient:
+                      LinearGradient(
                     colors: [
-                      Colors.green.shade700,
-                      Colors.green.shade400,
+                      Colors
+                          .green
+                          .shade800,
+                      Colors
+                          .green
+                          .shade600,
+                      Colors
+                          .green
+                          .shade400,
                     ],
                   ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(30),
+
+                  borderRadius:
+                      const BorderRadius
+                          .vertical(
+                    bottom:
+                        Radius.circular(
+                            30),
                   ),
                 ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ScaleTransition(
-                        scale: _pulseAnimation,
-                        child: const Icon(
+
+                child: Column(
+                  children: [
+                    AnimatedBuilder(
+                      animation:
+                          _floatAnimation,
+                      builder:
+                          (_, child) {
+                        return Transform
+                            .translate(
+                          offset:
+                              Offset(
+                            0,
+                            _floatAnimation
+                                .value,
+                          ),
+                          child:
+                              child,
+                        );
+                      },
+
+                      child:
+                          ScaleTransition(
+                        scale:
+                            _pulseAnimation,
+                        child:
+                            const Icon(
                           Icons.eco,
+                          color:
+                              Colors
+                                  .white,
                           size: 60,
-                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        langProvider.code == 'am'
-                            ? "የቡና በሽታ መለያ"
-                            : langProvider.code == 'om'
-                            ? "Addabbii Dhukkuba Buna"
-                            : "Coffee Disease Detector",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ),
+
+                    const SizedBox(
+                        height: 16),
+
+                    Text(
+                      tr(
+                        "Take Photo • Detect • Get Advice",
+                        "ፎቶ ያንሱ • ይለዩ • ምክር ያግኙ",
+                        "Suuraa kaasi • Adda baasi • Gorsa argadhu",
+                        code,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        langProvider.code == 'am'
-                            ? "ቅጠል ይቅረጹ እና ይለዩ"
-                            : langProvider.code == 'om'
-                            ? "Suuraa fudhadhu fi adda baasi"
-                            : "Capture & Identify",
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
+                      textAlign:
+                          TextAlign
+                              .center,
+                      style:
+                          const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight:
+                            FontWeight.bold,
                       ),
-                    ],
-                  ),
+                    ),
+
+                    const SizedBox(
+                        height: 18),
+
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment
+                              .spaceEvenly,
+                      children: [
+                        _MiniCard(
+                          title: "AI",
+                          sub: tr(
+                            "Smart",
+                            "ብልህ",
+                            "Smart",
+                            code,
+                          ),
+                        ),
+                        _MiniCard(
+                          title: "24/7",
+                          sub: tr(
+                            "Ready",
+                            "ዝግጁ",
+                            "Qophaa'e",
+                            code,
+                          ),
+                        ),
+                        _MiniCard(
+                          title: "Fast",
+                          sub: tr(
+                            "Result",
+                            "ውጤት",
+                            "Bu'aa",
+                            code,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(
+                  height: 16),
 
-              /// IMAGE PICKER SECTION
-              if (selectedImage == null)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeInOut,
-                    child: ImagePickerWidget(
-                      onImageSelected: handleImage,
-                    ),
-                  ),
+              // =================================================
+              // FEATURES
+              // =================================================
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 16,
                 ),
-
-              /// PROCESSING SECTION
-              if (isProcessing && selectedImage != null)
-                Column(
+                child: Row(
                   children: [
-                    Hero(
-                      tag: 'selected_image',
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.file(
-                          selectedImage!,
-                          height: 200,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                    Expanded(
+                      child: _FeatureBox(
+                        icon: Icons.camera_alt,
+                        title: tr(
+                          "Scan",
+                          "ስካን",
+                          "Scan",
+                          code,
                         ),
+                        subtitle: tr(
+                          "Take Image",
+                          "ፎቶ አንሳ",
+                          "Suuraa kaasi",
+                          code,
+                        ),
+                        color:
+                            Colors.green,
+                        card: card,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Shimmer.fromColors(
-                      baseColor: Colors.grey.shade300,
-                      highlightColor: Colors.grey.shade100,
-                      child: Text(
-                        langProvider.code == 'am'
-                            ? "የቡና ቅጠልዎን በመተንተን ላይ..."
-                            : langProvider.code == 'om'
-                            ? "Baala bunaa keessan xiinxalaa jira..."
-                            : "Analyzing your coffee leaf...",
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    const SizedBox(
+                        width: 10),
+                    Expanded(
+                      child: _FeatureBox(
+                        icon: Icons.analytics,
+                        title: tr(
+                          "Detect",
+                          "ለይ",
+                          "Beeki",
+                          code,
+                        ),
+                        subtitle: tr(
+                          "AI Analyze",
+                          "AI ይመርምር",
+                          "AI qorata",
+                          code,
+                        ),
+                        color:
+                            Colors.orange,
+                        card: card,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        langProvider.code == 'am'
-                            ? "እባክዎ ይጠብቁ..."
-                            : langProvider.code == 'om'
-                            ? "Maaloo eeggadhu..."
-                            : "Please wait...",
-                        style: TextStyle(color: Colors.green.shade800),
+                    const SizedBox(
+                        width: 10),
+                    Expanded(
+                      child: _FeatureBox(
+                        icon: Icons.healing,
+                        title: tr(
+                          "Treat",
+                          "ሕክምና",
+                          "Yaala",
+                          code,
+                        ),
+                        subtitle: tr(
+                          "Get Help",
+                          "እርዳታ",
+                          "Gargaarsa",
+                          code,
+                        ),
+                        color:
+                            Colors.blue,
+                        card: card,
                       ),
                     ),
                   ],
                 ),
+              ),
 
-              /// RESULT CARD
-              if (!isProcessing && disease.isNotEmpty)
+              const SizedBox(
+                  height: 20),
+
+              // =================================================
+              // PICK IMAGE
+              // =================================================
+              if (selectedImage == null)
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding:
+                      const EdgeInsets.all(
+                          16),
+                  child:
+                      ImagePickerWidget(
+                    onImageSelected:
+                        handleImage,
+                  ),
+                ),
+
+              // =================================================
+              // LOADING
+              // =================================================
+              if (isProcessing)
+                Padding(
+                  padding:
+                      const EdgeInsets.all(
+                          16),
+                  child: Container(
+                    padding:
+                        const EdgeInsets
+                            .all(18),
+                    decoration:
+                        BoxDecoration(
+                      color: card,
+                      borderRadius:
+                          BorderRadius.circular(
+                              18),
+                    ),
+                    child: Column(
+                      children: [
+                        if (selectedImage !=
+                            null)
+                          ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(
+                                    14),
+                            child:
+                                Image.file(
+                              selectedImage!,
+                              height:
+                                  180,
+                              width: double
+                                  .infinity,
+                              fit: BoxFit
+                                  .cover,
+                            ),
+                          ),
+
+                        const SizedBox(
+                            height: 18),
+
+                        Shimmer.fromColors(
+                          baseColor: Colors
+                              .grey
+                              .shade400,
+                          highlightColor:
+                              Colors.white,
+                          child: Text(
+                            tr(
+                              "Analyzing coffee leaf...",
+                              "የቡና ቅጠል በመመርመር ላይ...",
+                              "Baala buna qorachaa jira...",
+                              code,
+                            ),
+                            style:
+                                const TextStyle(
+                              fontSize:
+                                  18,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(
+                            height: 18),
+
+                        const CircularProgressIndicator(),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // =================================================
+              // RESULT
+              // =================================================
+              if (!isProcessing &&
+                  disease.isNotEmpty)
+                Padding(
+                  padding:
+                      const EdgeInsets.all(
+                          16),
                   child: ResultCard(
                     disease: disease,
-                    confidence: confidence,
-                    recommendation: recommendation,
-                    displayedText: displayedText,
-                    isCoffeeLeaf: isCoffeeLeaf,
-                    isSpeaking: isSpeaking,
-                    onSpeakToggle: () {
-                      isSpeaking ? _stopSpeak() : _speak(recommendation);
+                    confidence:
+                        confidence,
+                    recommendation:
+                        recommendation,
+                    displayedText:
+                        displayedText,
+                    isCoffeeLeaf:
+                        isCoffeeLeaf,
+                    isSpeaking:
+                        isSpeaking,
+                    onSpeakToggle:
+                        () {
+                      isSpeaking
+                          ? _stopSpeak()
+                          : _speak(
+                              recommendation);
                     },
                     onReset: _reset,
                   ),
                 ),
 
-              /// EMPTY STATE
-              if (!isProcessing && disease.isEmpty && selectedImage == null)
+              // =================================================
+              // EMPTY STATE
+              // =================================================
+              if (!isProcessing &&
+                  disease.isEmpty &&
+                  selectedImage ==
+                      null)
                 Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.photo_camera,
-                        size: 80,
-                        color: Colors.grey.shade400,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        langProvider.code == 'am'
-                            ? "ለመጀመር የቡና ቅጠል ፎቶ ይቅረጹ"
-                            : langProvider.code == 'om'
-                            ? "Suuraa baala bunaa fudhadhu"
-                            : "Tap the camera to start",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
+                  padding:
+                      const EdgeInsets.all(
+                          20),
+                  child: Container(
+                    width:
+                        double.infinity,
+                    padding:
+                        const EdgeInsets
+                            .all(20),
+                    decoration:
+                        BoxDecoration(
+                      color: card,
+                      borderRadius:
+                          BorderRadius.circular(
+                              18),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons
+                              .camera_alt_outlined,
+                          size: 72,
+                          color: Colors
+                              .green
+                              .shade400,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                        const SizedBox(
+                            height: 12),
+                        Text(
+                          tr(
+                            "Start by taking coffee leaf photo",
+                            "የቡና ቅጠል ፎቶ በማንሳት ይጀምሩ",
+                            "Suuraa baala buna irraa jalqabi",
+                            code,
+                          ),
+                          textAlign:
+                              TextAlign
+                                  .center,
+                          style:
+                              TextStyle(
+                            color: txt,
+                            fontWeight:
+                                FontWeight.bold,
+                            fontSize:
+                                16,
+                          ),
+                        ),
+                        const SizedBox(
+                            height: 8),
+                        Text(
+                          tr(
+                            "Tip: Use natural light.",
+                            "ምክር፡ የተፈጥሮ ብርሃን ይጠቀሙ።",
+                            "Gorsa: Ifa uumamaa fayyadami.",
+                            code,
+                          ),
+                          style:
+                              TextStyle(
+                            color: txt
+                                .withOpacity(
+                                    .7),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+
+              const SizedBox(
+                  height: 30),
             ],
           ),
         ),
+      ),
+
+      floatingActionButton:
+          FloatingActionButton.extended(
+        backgroundColor:
+            Colors.green.shade700,
+        icon: const Icon(
+          Icons.history,
+        ),
+        label: Text(
+          tr(
+            "History",
+            "ታሪክ",
+            "Seenaa",
+            code,
+          ),
+        ),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (_) =>
+                      const HistoryScreen(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// =====================================================
+// MINI CARD
+// =====================================================
+
+class _MiniCard extends StatelessWidget {
+  final String title;
+  final String sub;
+
+  const _MiniCard({
+    required this.title,
+    required this.sub,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          title,
+          style:
+              const TextStyle(
+            color: Colors.white,
+            fontWeight:
+                FontWeight.bold,
+            fontSize: 17,
+          ),
+        ),
+        Text(
+          sub,
+          style:
+              const TextStyle(
+            color:
+                Colors.white70,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =====================================================
+// FEATURE BOX
+// =====================================================
+
+class _FeatureBox extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final Color card;
+
+  const _FeatureBox({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.card,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.all(
+              14),
+      decoration:
+          BoxDecoration(
+        color: card,
+        borderRadius:
+            BorderRadius.circular(
+                16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: color,
+            size: 28,
+          ),
+          const SizedBox(
+              height: 10),
+          Text(
+            title,
+            style:
+                const TextStyle(
+              fontWeight:
+                  FontWeight.bold,
+            ),
+          ),
+          const SizedBox(
+              height: 4),
+          Text(
+            subtitle,
+            textAlign:
+                TextAlign.center,
+            style:
+                TextStyle(
+              fontSize: 11,
+              color: Colors
+                  .grey
+                  .shade600,
+            ),
+          ),
+        ],
       ),
     );
   }

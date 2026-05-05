@@ -1,13 +1,26 @@
+// ============================================================
+// FILE: lib/screens/home/widgets/role_drawer.dart
+// FULL UPGRADED DRAWER WITH NEW PUBLIC FEATURES
+// Replace your old role_drawer.dart with this code
+// ============================================================
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
+import '../../../providers/language_provider.dart';
+import '../../../core/services/hive_service.dart';
+
 import '../../detection/history_screen.dart';
 import '../../expert/expert_dashboard.dart';
 import '../../admin/admin_dashboard.dart';
 import '../../auth/login_screen.dart';
-import '../../../core/services/hive_service.dart';
-import '../../../providers/language_provider.dart';
-import 'package:provider/provider.dart';
+
+// NEW PUBLIC SCREENS
+import '../../public/daily_tips_screen.dart';
+import '../../public/feedback_screen.dart';
+import '../../public/about_developer_screen.dart';
+import '../../public/help_center_screen.dart';
 
 class RoleDrawer extends StatelessWidget {
   final UserModel? currentUser;
@@ -17,132 +30,235 @@ class RoleDrawer extends StatelessWidget {
     required this.currentUser,
   });
 
+  String tr(
+    String en,
+    String am,
+    String om,
+    String code,
+  ) {
+    if (code == "am") return am;
+    if (code == "om") return om;
+    return en;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final lang = context.watch<LanguageProvider>();
+    final code = lang.code;
     final role = currentUser?.role;
-    final langProvider = context.watch<LanguageProvider>();
-    final isAmharic = langProvider.code == 'am';
-    final isOromo = langProvider.code == 'om';
-    
-    // Localized text
-    String historyText = "History";
-    String expertDashboardText = "Expert Dashboard";
-    String adminDashboardText = "Admin Dashboard";
-    String loginText = "Login";
-    String logoutText = "Logout";
-    String coffeeGuardText = "CoffeeGuard";
-    
-    if (isAmharic) {
-      historyText = "ታሪክ";
-      expertDashboardText = "የባለሙያ ዳሽቦርድ";
-      adminDashboardText = "የአስተዳዳሪ ዳሽቦርድ";
-      loginText = "ግባ";
-      logoutText = "ውጣ";
-      coffeeGuardText = "ቡናጋርድ";
-    } else if (isOromo) {
-      historyText = "Seenaa";
-      expertDashboardText = "Deezbaardii Ogeessaa";
-      adminDashboardText = "Deezbaardii Admin";
-      loginText = "Seenuu";
-      logoutText = "Ba'uu";
-      coffeeGuardText = "BunaGuard";
-    }
 
     return Drawer(
       child: Column(
         children: [
+          // HEADER
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            color: Colors.green.shade700,
+            padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.green.shade800,
+                  Colors.green.shade600,
+                ],
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.eco, size: 40, color: Colors.white),
+                const Icon(
+                  Icons.eco,
+                  color: Colors.white,
+                  size: 42,
+                ),
                 const SizedBox(height: 10),
                 Text(
-                  coffeeGuardText,
-                  style: const TextStyle(color: Colors.white, fontSize: 20),
-                ),
-                if (currentUser != null)
-                  Text(
-                    currentUser!.email ?? "",
-                    style: const TextStyle(color: Colors.white70),
+                  tr(
+                    "CoffeeGuard",
+                    "ቡናጋርድ",
+                    "BunaGuard",
+                    code,
                   ),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  currentUser?.email ?? "",
+                  style: const TextStyle(
+                    color: Colors.white70,
+                  ),
+                ),
               ],
             ),
           ),
 
           Expanded(
             child: ListView(
+              padding: EdgeInsets.zero,
               children: [
-                ListTile(
-                  leading: const Icon(Icons.history),
-                  title: Text(historyText),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const HistoryScreen(),
-                      ),
-                    );
-                  },
+                // ====================================
+                // HISTORY
+                // ====================================
+                _tile(
+                  context,
+                  icon: Icons.history,
+                  title: tr(
+                    "History",
+                    "ታሪክ",
+                    "Seenaa",
+                    code,
+                  ),
+                  page: const HistoryScreen(),
                 ),
 
+                // ====================================
+                // DAILY TIPS
+                // ====================================
+                _tile(
+                  context,
+                  icon: Icons.lightbulb,
+                  title: tr(
+                    "Daily Tips",
+                    "የዕለት ምክሮች",
+                    "Gorsa Guyyaa",
+                    code,
+                  ),
+                  page: const DailyTipsScreen(),
+                ),
+
+                // ====================================
+                // HELP CENTER
+                // ====================================
+                _tile(
+                  context,
+                  icon: Icons.support_agent,
+                  title: tr(
+                    "Help Center",
+                    "የእርዳታ ማዕከል",
+                    "Gargaarsa",
+                    code,
+                  ),
+                  page: const HelpCenterScreen(),
+                ),
+
+                // ====================================
+                // FEEDBACK
+                // ====================================
+                _tile(
+                  context,
+                  icon: Icons.feedback,
+                  title: tr(
+                    "Feedback",
+                    "አስተያየት",
+                    "Yaada",
+                    code,
+                  ),
+                  page: const FeedbackScreen(),
+                ),
+
+                // ====================================
+                // ABOUT DEV
+                // ====================================
+                _tile(
+                  context,
+                  icon: Icons.person,
+                  title: tr(
+                    "About Developer",
+                    "ስለ አበልጻጊው",
+                    "Waa'ee Developer",
+                    code,
+                  ),
+                  page: const AboutDeveloperScreen(),
+                ),
+
+                const Divider(),
+
+                // ====================================
+                // EXPERT
+                // ====================================
                 if (role == "expert")
-                  ListTile(
-                    leading: const Icon(Icons.dashboard),
-                    title: Text(expertDashboardText),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ExpertDashboard(),
-                        ),
-                      );
-                    },
+                  _tile(
+                    context,
+                    icon: Icons.dashboard,
+                    title: tr(
+                      "Expert Dashboard",
+                      "የባለሙያ ዳሽቦርድ",
+                      "Dashboordii Ogeessaa",
+                      code,
+                    ),
+                    page: const ExpertDashboard(),
                   ),
 
+                // ====================================
+                // ADMIN
+                // ====================================
                 if (role == "admin")
-                  ListTile(
-                    leading: const Icon(Icons.admin_panel_settings),
-                    title: Text(adminDashboardText),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AdminDashboard(),
-                        ),
-                      );
-                    },
+                  _tile(
+                    context,
+                    icon: Icons.admin_panel_settings,
+                    title: tr(
+                      "Admin Dashboard",
+                      "የአስተዳዳሪ ዳሽቦርድ",
+                      "Dashboordii Admin",
+                      code,
+                    ),
+                    page: const AdminDashboard(),
                   ),
               ],
             ),
           ),
 
+          // LOGIN / LOGOUT
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             child: currentUser == null
                 ? ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      minimumSize:
+                          const Size(double.infinity, 48),
+                      backgroundColor:
+                          Colors.green.shade700,
+                    ),
                     icon: const Icon(Icons.login),
-                    label: Text(loginText),
+                    label: Text(
+                      tr(
+                        "Login",
+                        "ግባ",
+                        "Seeni",
+                        code,
+                      ),
+                    ),
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const LoginScreen(),
+                          builder: (_) =>
+                              const LoginScreen(),
                         ),
                       );
                     },
                   )
                 : ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
+                      minimumSize:
+                          const Size(double.infinity, 48),
                       backgroundColor: Colors.red,
                     ),
                     icon: const Icon(Icons.logout),
-                    label: Text(logoutText),
+                    label: Text(
+                      tr(
+                        "Logout",
+                        "ውጣ",
+                        "Ba'i",
+                        code,
+                      ),
+                    ),
                     onPressed: () async {
                       await HiveService.clearUserSession();
+
                       if (context.mounted) {
                         Navigator.pop(context);
                       }
@@ -151,6 +267,29 @@ class RoleDrawer extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _tile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required Widget page,
+  }) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: Colors.green.shade700,
+      ),
+      title: Text(title),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => page,
+          ),
+        );
+      },
     );
   }
 }
