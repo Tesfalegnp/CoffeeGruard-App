@@ -1,26 +1,25 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../../widgets/image_picker_widget.dart';
-import '../../widgets/home/home_header.dart';
-import '../../widgets/home/processing_widget.dart';
-import '../../widgets/home/result_card.dart';
-import '../../widgets/home/custom_drawer.dart';
 import '../../core/services/detection_service.dart';
+import '../../core/services/recommendation_service.dart';
 import '../../core/services/sync_service.dart';
 import '../../core/services/hive_service.dart';
-import '../../core/services/language_service.dart';
-import '../../core/theme/app_theme.dart';
-import '../../core/utils/text_animator.dart';
 import '../../models/user_model.dart';
-import '../../models/recommendation_model.dart';
+import '../../providers/language_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../detection/history_screen.dart';
+import 'widgets/result_card.dart';
+import 'widgets/role_drawer.dart';
+import 'widgets/language_selector.dart';
+import 'widgets/theme_selector.dart';
 
 class HeroHomeScreen extends StatefulWidget {
   const HeroHomeScreen({super.key});
@@ -29,79 +28,101 @@ class HeroHomeScreen extends StatefulWidget {
   State<HeroHomeScreen> createState() => _HeroHomeScreenState();
 }
 
-class _HeroHomeScreenState extends State<HeroHomeScreen> with SingleTickerProviderStateMixin {
+class _HeroHomeScreenState extends State<HeroHomeScreen>
+    with TickerProviderStateMixin {
   final DetectionService detectionService = DetectionService();
+  final RecommendationService recommendationService = RecommendationService();
   final SyncService syncService = SyncService();
   final FlutterTts tts = FlutterTts();
-  final ScrollController _scrollController = ScrollController();
+
   late AnimationController _pulseController;
+  late AnimationController _slideController;
   late Animation<double> _pulseAnimation;
-  final TextAnimator _textAnimator = TextAnimator();
+  late Animation<Offset> _slideAnimation;
+
+  final ScrollController _scrollController = ScrollController();
+
+  File? selectedImage;
 
   bool isProcessing = false;
   bool isSpeaking = false;
-  bool isDarkMode = false;
-  RecommendationModel? currentRecommendationModel;
-  File? selectedImage;
-  String? disease;
-  double? confidence;
-  String? recommendation;
   bool isCoffeeLeaf = true;
+
+  String disease = "";
+  double confidence = 0.0;
+  String recommendation = "";
+  String displayedText = "";
+
+  Timer? _typingTimer;
+
   UserModel? currentUser;
 
   @override
   void initState() {
     super.initState();
-    _initAnimations();
-    detectionService.init();
-    _initTTS();
-    _loadPreferences();
-    currentUser = HiveService.getCurrentUser();
     
-    // Initialize language service
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<LanguageService>(context, listen: false).init();
-    });
-  }
-
-  void _initAnimations() {
+    // Initialize animations
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(_pulseController);
+    
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+    
+    detectionService.init();
+    currentUser = HiveService.getCurrentUser();
+    _initTTS();
+    
+    _slideController.forward();
+    
+    // Pre-load recommendations on startup
+    _preloadRecommendations();
+  }
+  
+  Future<void> _preloadRecommendations() async {
+    await recommendationService.syncRecommendations();
   }
 
-  Future<void> _initTTS() async {
+  /// =========================
+  /// 🔊 TEXT TO SPEECH SETUP
+  /// =========================
+  void _initTTS() async {
     await tts.setSpeechRate(0.5);
     await tts.setPitch(1.0);
-    final lang = Provider.of<LanguageService>(context, listen: false);
-    await tts.setLanguage(lang.languageCode == 'am' ? "am-ET" : 
-                          lang.languageCode == 'om' ? "om-ET" : "en-US");
-    tts.setCompletionHandler(() {
-      setState(() => isSpeaking = false);
-    });
-  }
-
-  Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isDarkMode = prefs.getBool('darkMode') ?? false;
-    });
-  }
-
-  Future<void> _savePreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('darkMode', isDarkMode);
   }
 
   Future<void> _speak(String text) async {
-    if (text.isEmpty) return;
-    await tts.stop();
+    if (!mounted) return;
+
+    final lang = Provider.of<LanguageProvider>(
+      context,
+      listen: false,
+    ).code;
+
+    switch (lang) {
+      case "am":
+        await tts.setLanguage("am-ET");
+        break;
+      case "om":
+        await tts.setLanguage("en-US");
+        break;
+      default:
+        await tts.setLanguage("en-US");
+    }
+
     setState(() => isSpeaking = true);
-    final lang = Provider.of<LanguageService>(context, listen: false);
-    await tts.setLanguage(lang.languageCode == 'am' ? "am-ET" : 
-                          lang.languageCode == 'om' ? "om-ET" : "en-US");
     await tts.speak(text);
   }
 
@@ -110,373 +131,350 @@ class _HeroHomeScreenState extends State<HeroHomeScreen> with SingleTickerProvid
     setState(() => isSpeaking = false);
   }
 
+  /// =========================
+  /// 📸 IMAGE PROCESSING
+  /// =========================
   Future<void> handleImage(File image) async {
+    final lang = Provider.of<LanguageProvider>(
+      context,
+      listen: false,
+    ).code;
+
+    _typingTimer?.cancel();
     await _stopSpeak();
 
     setState(() {
       selectedImage = image;
       isProcessing = true;
-      disease = null;
-      confidence = null;
-      recommendation = null;
+      disease = "";
+      recommendation = "";
+      displayedText = "";
       isCoffeeLeaf = true;
     });
 
     final result = await detectionService.runDetection(image);
 
     if (result["success"] == false) {
-      final lang = Provider.of<LanguageService>(context, listen: false);
       setState(() {
         isProcessing = false;
-        disease = lang.translate(
-          "Sorry, This is Not a Coffee Leaf",
-          "ይቅርታ, ይህ የቡና ቅጠል አይደለም",
-          "Dhiifama, Kun Baala Kubbaa Mitii",
-        );
+        disease = "Detection Failed";
         recommendation = result["message"];
       });
-      _animateRecommendation(recommendation ?? "");
-      _scrollToResult();
+
+      _typeText(recommendation);
       return;
     }
 
     final detectedDisease = result["disease"];
-    final detectedConfidence = double.parse(result["confidence"].toString()) / 100;
+    final detectedConfidence = result["diseaseConfidence"];
 
+    /// ❌ Not coffee leaf
     if (detectedDisease.toLowerCase().contains("not") ||
         detectedDisease.toLowerCase().contains("unknown")) {
-      final lang = Provider.of<LanguageService>(context, listen: false);
       setState(() {
         isCoffeeLeaf = false;
-        disease = lang.translate(
-          "Sorry, This is Not a Coffee Leaf",
-          "ይቅርታ, ይህ የቡና ቅጠል አይደለም",
-          "Dhiifama, Kun Baala Kubbaa Mitii",
-        );
+        disease = "Not a Coffee Leaf";
         confidence = detectedConfidence;
-        recommendation = lang.translate(
-          "Please capture a clear coffee leaf. Use natural light, focus on one leaf, and avoid blur.",
-          "እባክዎ ግልጽ የቡና ቅጠል ያንሱ። ተፈጥሯዊ ብርሃን ይጠቀሙ፣ በአንድ ቅጠል ላይ ያተኩሩ እና ድብዘዛ ያስወግዱ።",
-          "Mee baala kubbaa ifa ta'e fudhadhu. Ifa uumamaa fayyadami, baala tokko iratti xiyyeeffadhu, fi tasgabbii dhorki.",
-        );
+        recommendation = lang == 'am' 
+            ? "እባክዎ በተፈጥሮ ብርሃን ስር ግልጽ የሆነ የቡና ቅጠል ይቅረጹ"
+            : lang == 'om'
+            ? "Maaloo suuraa baala bunaa ifa uumamaa keessatti ifa ta'e fudhadhu"
+            : "Please capture a clear coffee leaf under natural light";
         isProcessing = false;
       });
-      _animateRecommendation(recommendation!);
-      _scrollToResult();
+
+      _typeText(recommendation);
       return;
     }
 
-    final recModel = result["recommendationModel"];
-    String detectedRecommendation;
-    if (recModel != null) {
-      final lang = Provider.of<LanguageService>(context, listen: false);
-      if (lang.isAmharic) {
-        detectedRecommendation = recModel.contentAm ?? recModel.content;
-      } else if (lang.isOromo) {
-        detectedRecommendation = recModel.contentOm ?? recModel.content;
-      } else {
-        detectedRecommendation = recModel.content;
-      }
-    } else {
-      detectedRecommendation = _smartRecommendation(detectedDisease);
-    }
+    /// 🌍 GET RECOMMENDATION (USES LOCAL CACHE FIRST)
+    final rec = await recommendationService.getRecommendation(
+      diseaseLabel: detectedDisease,
+      languageCode: lang,
+    );
 
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult != ConnectivityResult.none) {
+    /// 🌐 SYNC IF ONLINE
+    final net = await Connectivity().checkConnectivity();
+    if (net != ConnectivityResult.none) {
       syncService.syncDetections();
     }
 
     setState(() {
       disease = detectedDisease;
       confidence = detectedConfidence;
-      currentRecommendationModel = recModel;
-      recommendation = detectedRecommendation;
+      recommendation = rec;
       isProcessing = false;
     });
 
-    _animateRecommendation(detectedRecommendation);
-    _scrollToResult();
+    _typeText(rec);
   }
 
-  void _animateRecommendation(String text) {
-    _textAnimator.animateText(
-      fullText: text,
-      onUpdate: () => setState(() {}),
+  /// =========================
+  /// ⌨ TYPEWRITER EFFECT
+  /// =========================
+  void _typeText(String text) {
+    displayedText = "";
+    int i = 0;
+
+    _typingTimer = Timer.periodic(
+      const Duration(milliseconds: 20),
+      (timer) {
+        if (i < text.length) {
+          setState(() => displayedText += text[i]);
+          i++;
+        } else {
+          timer.cancel();
+        }
+      },
     );
   }
 
-  void _scrollToResult() {
-    Future.delayed(const Duration(milliseconds: 300), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
-  }
-
-  String _smartRecommendation(String disease) {
-    final lang = Provider.of<LanguageService>(context, listen: false);
-    
-    if (disease.toLowerCase().contains("healthy")) {
-      return lang.translate(
-        "Healthy plant. Keep monitoring and maintain proper watering.",
-        "ጤናማ ተክል። ክትትል ያድርጉ እና ትክክለኛ ውሃ ይጠብቁ።",
-        "Biqilgaa fayyaa qabu. Ilaalcha irraa eegii fi bishaan bu'aa eegi.",
-      );
-    }
-    if (disease.toLowerCase().contains("rust")) {
-      return lang.translate(
-        "Coffee Rust disease detected. Remove infected leaves, apply copper-based fungicide, and monitor daily.",
-        "የቡና ዝገት በሽታ ተገኝቷል። የበሽታውን ቅጠሎች ያስወግዱ፣ መዳብ ላይ የተመሰረተ ፀረ-ፈንገስ ይጠቀሙ እና በየቀኑ ይቆጣጠሩ።",
-        "Dhukkubaan Kubbaa Dhullaa'e. Baalota dhukkubsatan balleessi, farra-fungusii kan koppira irratti hundoofte fayyadami, fi guyyatti ilaali.",
-      );
-    }
-    return lang.translate(
-      "Disease detected. Remove infected leaves, apply appropriate fungicide, and monitor daily.",
-      "በሽታ ተገኝቷል። የበሽታውን ቅጠሎች ያስወግዱ፣ ተገቢውን ፀረ-ፈንገስ ይጠቀሙ እና በየቀኑ ይቆጣጠሩ።",
-      "Dhukkubni argame. Baalota dhukkubsatan balleessi, farra-fungusii madaalawaa fayyadami, fi guyyatti ilaali.",
-    );
-  }
-
+  /// =========================
+  /// 🔄 RESET
+  /// =========================
   void _reset() async {
+    _typingTimer?.cancel();
     await _stopSpeak();
+
     setState(() {
       selectedImage = null;
-      disease = null;
-      confidence = null;
-      recommendation = null;
+      disease = "";
+      confidence = 0.0;
+      recommendation = "";
+      displayedText = "";
       isProcessing = false;
-      currentRecommendationModel = null;
-    });
-  }
-
-  void _toggleLanguage() async {
-    final lang = Provider.of<LanguageService>(context, listen: false);
-    
-    // Cycle through languages
-    if (lang.isEnglish) {
-      await lang.setLanguage(AppLanguage.amharic);
-    } else if (lang.isAmharic) {
-      await lang.setLanguage(AppLanguage.oromo);
-    } else {
-      await lang.setLanguage(AppLanguage.english);
-    }
-    
-    // Update displayed text based on new language
-    if (currentRecommendationModel != null) {
-      String newRecommendation;
-      if (lang.isAmharic) {
-        newRecommendation = currentRecommendationModel!.contentAm ?? currentRecommendationModel!.content;
-      } else if (lang.isOromo) {
-        newRecommendation = currentRecommendationModel!.contentOm ?? currentRecommendationModel!.content;
-      } else {
-        newRecommendation = currentRecommendationModel!.content;
-      }
-      setState(() {
-        recommendation = newRecommendation;
-      });
-      _animateRecommendation(newRecommendation);
-    } else if (disease != null && !isCoffeeLeaf) {
-      final newRecommendation = _smartRecommendation(disease!);
-      setState(() {
-        recommendation = newRecommendation;
-      });
-      _animateRecommendation(newRecommendation);
-    } else if (disease != null && recommendation != null) {
-      final newRecommendation = _smartRecommendation(disease!);
-      setState(() {
-        recommendation = newRecommendation;
-      });
-      _animateRecommendation(newRecommendation);
-    }
-    
-    await _initTTS();
-  }
-
-  void _toggleTheme() async {
-    setState(() {
-      isDarkMode = !isDarkMode;
-    });
-    await _savePreferences();
-  }
-
-  void _updateUser() {
-    setState(() {
-      currentUser = HiveService.getCurrentUser();
     });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _typingTimer?.cancel();
     _pulseController.dispose();
-    _textAnimator.dispose();
+    _slideController.dispose();
+    _scrollController.dispose();
     tts.stop();
     super.dispose();
   }
 
+  /// =========================
+  /// 🏠 UI with Attractive Design
+  /// =========================
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => LanguageService()),
-      ],
-      child: Consumer<LanguageService>(
-        builder: (context, lang, child) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme(isDarkMode),
-            home: Scaffold(
-              drawer: CustomDrawer(
-                isDarkMode: isDarkMode,
-                currentUser: currentUser,
-                onLanguageToggle: _toggleLanguage,
-                onThemeToggle: _toggleTheme,
-                onUserUpdate: _updateUser,
-              ),
-              appBar: _buildAppBar(lang),
-              body: _buildBody(lang),
-              floatingActionButton: _buildFloatingButton(lang),
+    final langProvider = context.watch<LanguageProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.currentTheme == AppThemeMode.dark;
+    
+    String titleText = "CoffeeGuard";
+    String subtitleText = "Protect your coffee plants";
+    
+    if (langProvider.code == 'am') {
+      titleText = "ቡናጋርድ";
+      subtitleText = "የቡና ተክሎችዎን ይጠብቁ";
+    } else if (langProvider.code == 'om') {
+      titleText = "BunaGuard";
+      subtitleText = "Buna keessan eegaa";
+    }
+
+    return Scaffold(
+      drawer: RoleDrawer(currentUser: currentUser),
+      appBar: AppBar(
+        title: Column(
+          children: [
+            Text(
+              titleText,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(LanguageService lang) {
-    return AppBar(
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            child: Icon(Icons.eco, color: Colors.yellow.shade700, size: 28),
-          ),
-          const SizedBox(width: 10),
-          Text("CoffeeGuard AI", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Icon(
-              isDarkMode ? Icons.light_mode : Icons.dark_mode,
-              key: ValueKey(isDarkMode),
-            ),
-          ),
-          onPressed: _toggleTheme,
-          tooltip: lang.translate("Light Mode", "ብርሃን ሁነታ", "Haala Ifaa"),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBody(LanguageService lang) {
-    return SingleChildScrollView(
-      controller: _scrollController,
-      child: Column(
-        children: [
-          HomeHeader(isDarkMode: isDarkMode),
-          const SizedBox(height: 20),
-          if (selectedImage == null) _buildImagePickerContainer(lang),
-          if (isProcessing && selectedImage != null) ProcessingWidget(selectedImage: selectedImage!),
-          if (!isProcessing && disease != null) _buildResultCard(lang),
-          const SizedBox(height: 30),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImagePickerContainer(LanguageService lang) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 500),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDarkMode 
-                ? [Colors.grey.shade800, Colors.grey.shade700]
-                : [Colors.green.shade50, Colors.lime.shade50],
-          ),
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(
-            color: isDarkMode ? Colors.green.shade400 : Colors.green.shade200,
-            width: 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.green.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
+            Text(
+              subtitleText,
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.normal),
             ),
           ],
         ),
-        child: Stack(
-          children: [
-            ImagePickerWidget(
-              onImageSelected: handleImage,
-            ),
-            if (selectedImage == null)
-              Positioned.fill(
+        backgroundColor: Colors.green.shade700,
+        centerTitle: true,
+        actions: const [
+          ThemeSelector(),
+          LanguageSelector(),
+        ],
+      ),
+      body: SlideTransition(
+        position: _slideAnimation,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          child: Column(
+            children: [
+              /// Hero Animated Header
+              Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.green.shade700,
+                      Colors.green.shade400,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(30),
+                  ),
+                ),
                 child: Center(
-                  child: ScaleTransition(
-                    scale: _pulseAnimation,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.green.withOpacity(0.5),
-                          width: 2,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ScaleTransition(
+                        scale: _pulseAnimation,
+                        child: const Icon(
+                          Icons.eco,
+                          size: 60,
+                          color: Colors.white,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      Text(
+                        langProvider.code == 'am'
+                            ? "የቡና በሽታ መለያ"
+                            : langProvider.code == 'om'
+                            ? "Addabbii Dhukkuba Buna"
+                            : "Coffee Disease Detector",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        langProvider.code == 'am'
+                            ? "ቅጠል ይቅረጹ እና ይለዩ"
+                            : langProvider.code == 'om'
+                            ? "Suuraa fudhadhu fi adda baasi"
+                            : "Capture & Identify",
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-          ],
+
+              const SizedBox(height: 20),
+
+              /// IMAGE PICKER SECTION
+              if (selectedImage == null)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.easeInOut,
+                    child: ImagePickerWidget(
+                      onImageSelected: handleImage,
+                    ),
+                  ),
+                ),
+
+              /// PROCESSING SECTION
+              if (isProcessing && selectedImage != null)
+                Column(
+                  children: [
+                    Hero(
+                      tag: 'selected_image',
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.file(
+                          selectedImage!,
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Shimmer.fromColors(
+                      baseColor: Colors.grey.shade300,
+                      highlightColor: Colors.grey.shade100,
+                      child: Text(
+                        langProvider.code == 'am'
+                            ? "የቡና ቅጠልዎን በመተንተን ላይ..."
+                            : langProvider.code == 'om'
+                            ? "Baala bunaa keessan xiinxalaa jira..."
+                            : "Analyzing your coffee leaf...",
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        langProvider.code == 'am'
+                            ? "እባክዎ ይጠብቁ..."
+                            : langProvider.code == 'om'
+                            ? "Maaloo eeggadhu..."
+                            : "Please wait...",
+                        style: TextStyle(color: Colors.green.shade800),
+                      ),
+                    ),
+                  ],
+                ),
+
+              /// RESULT CARD
+              if (!isProcessing && disease.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ResultCard(
+                    disease: disease,
+                    confidence: confidence,
+                    recommendation: recommendation,
+                    displayedText: displayedText,
+                    isCoffeeLeaf: isCoffeeLeaf,
+                    isSpeaking: isSpeaking,
+                    onSpeakToggle: () {
+                      isSpeaking ? _stopSpeak() : _speak(recommendation);
+                    },
+                    onReset: _reset,
+                  ),
+                ),
+
+              /// EMPTY STATE
+              if (!isProcessing && disease.isEmpty && selectedImage == null)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.photo_camera,
+                        size: 80,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        langProvider.code == 'am'
+                            ? "ለመጀመር የቡና ቅጠል ፎቶ ይቅረጹ"
+                            : langProvider.code == 'om'
+                            ? "Suuraa baala bunaa fudhadhu"
+                            : "Tap the camera to start",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildResultCard(LanguageService lang) {
-    return ResultCard(
-      selectedImage: selectedImage,
-      disease: disease!,
-      confidence: confidence,
-      recommendation: recommendation ?? "",
-      currentRecommendationModel: currentRecommendationModel,
-      isCoffeeLeaf: isCoffeeLeaf,
-      onReset: _reset,
-      onLanguageToggle: _toggleLanguage,
-      tts: tts,
-      isSpeaking: isSpeaking,
-      onSpeak: () => _speak(recommendation ?? ""),
-      onStopSpeak: _stopSpeak,
-      textAnimator: _textAnimator,
-      displayedText: _textAnimator.displayedText,
-    );
-  }
-
-  Widget _buildFloatingButton(LanguageService lang) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      child: FloatingActionButton.extended(
-        onPressed: _reset,
-        icon: const Icon(Icons.photo_camera),
-        label: Text(lang.translate("New Scan", "አዲስ ፎቶ", "Fudhanna Haaraa")),
-        backgroundColor: Colors.green.shade600,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       ),
     );
   }

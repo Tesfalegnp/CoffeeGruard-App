@@ -3,30 +3,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'config/supabase_config.dart';
 import 'core/services/hive_service.dart';
 import 'core/services/recommendation_service.dart';
-import 'core/services/language_service.dart'; // Add this
+import 'core/theme/app_theme.dart';
+
 import 'providers/admin_provider.dart';
+import 'providers/language_provider.dart';
+import 'providers/theme_provider.dart';
+
 import 'screens/home/hero_home_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Hive and other services before running app
+
   try {
     await dotenv.load(fileName: ".env");
+
     await Supabase.initialize(
       url: SupabaseConfig.supabaseUrl,
       anonKey: SupabaseConfig.supabaseAnonKey,
     );
+
     await HiveService.init();
     await RecommendationService().syncRecommendations();
   } catch (e) {
     debugPrint("Initialization Error: $e");
   }
-  
+
   runApp(const CoffeeGuardApp());
 }
 
@@ -38,22 +44,75 @@ class CoffeeGuardApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AdminProvider()),
-        ChangeNotifierProvider(create: (_) => LanguageService()), // Add Language Service
-      ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: "CoffeeGuard",
-        theme: ThemeData(
-          primarySwatch: Colors.green,
-          fontFamily: 'Poppins',
-          useMaterial3: true,
+
+        /// 🌍 LANGUAGE PROVIDER
+        ChangeNotifierProvider(
+          create: (_) => LanguageProvider()..loadLanguage(),
         ),
-        home: const StartupScreen(),
-      ),
+
+        /// 🎨 THEME PROVIDER
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider()..loadTheme(),
+        ),
+      ],
+      child: const AppRoot(),
     );
   }
 }
 
+/// =======================================
+/// 🔥 FIX: LANGUAGE NOW REACTS GLOBALLY
+/// =======================================
+class AppRoot extends StatelessWidget {
+  const AppRoot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final languageProvider = context.watch<LanguageProvider>();
+
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: "CoffeeGuard",
+
+      /// 🌍 FIX LANGUAGE - Use locale but with fallback for unsupported languages
+      locale: languageProvider.locale,
+      
+      /// 🔥 CRITICAL FIX: Set fallback locale for languages without Material support
+      localeResolutionCallback: (locale, supportedLocales) {
+        // If the locale is Oromo (om), fallback to English for Material components
+        if (locale?.languageCode == 'om') {
+          return const Locale('en', 'US');
+        }
+        return locale;
+      },
+
+      supportedLocales: const [
+        Locale('en', 'US'),
+        Locale('am', 'ET'),
+        Locale('om', 'ET'),
+      ],
+
+      /// 🔥 CRITICAL FIX - Added all localization delegates
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+
+      /// 🎨 THEME SUPPORT
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeProvider.themeMode,
+
+      home: const StartupScreen(),
+    );
+  }
+}
+
+/// ==============================
+/// 🚀 STARTUP SCREEN
+/// ==============================
 class StartupScreen extends StatefulWidget {
   const StartupScreen({super.key});
 
@@ -62,56 +121,80 @@ class StartupScreen extends StatefulWidget {
 }
 
 class _StartupScreenState extends State<StartupScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+
   String _loadingMessage = "Preparing smart detection...";
-  int _loadingStep = 0;
-  
-  final List<String> _loadingMessages = [
-    "Initializing AI model...",
-    "Loading disease database...",
-    "Setting up language support...",
-    "Ready to protect coffee!",
-  ];
+
+  final Map<String, List<String>> _loadingMessages = {
+    'en': [
+      "Initializing AI model...",
+      "Loading disease database...",
+      "Setting up language support...",
+      "Ready to protect coffee!"
+    ],
+    'am': [
+      "ኤአይ ሞዴል በማስጀመር ላይ...",
+      "የበሽታ ውሂብ ጎታ በመጫን ላይ...",
+      "የቋንቋ ድጋፍ በማዘጋጀት ላይ...",
+      "ቡናን ለመጠበቅ ዝግጁ!"
+    ],
+    'om': [
+      "Moodelii AI kan eegaluu...",
+      "Gurmuu dhukkuba qaamaa kan fe'uu...",
+      "Deeggarsa afaanii kan qopheessuu...",
+      "Buna eeguuf qophaa'aa!"
+    ],
+  };
 
   @override
   void initState() {
     super.initState();
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 6),
     )..repeat();
-    
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+
     _simulateLoadingSteps();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeApp();
     });
   }
-  
+
   void _simulateLoadingSteps() {
     Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) setState(() => _loadingMessage = _loadingMessages[0]);
+      if (mounted) _updateLoadingMessage(0);
     });
+
     Future.delayed(const Duration(milliseconds: 3000), () {
-      if (mounted) setState(() => _loadingMessage = _loadingMessages[1]);
+      if (mounted) _updateLoadingMessage(1);
     });
+
     Future.delayed(const Duration(milliseconds: 4500), () {
-      if (mounted) setState(() => _loadingMessage = _loadingMessages[2]);
+      if (mounted) _updateLoadingMessage(2);
     });
+
     Future.delayed(const Duration(milliseconds: 5500), () {
-      if (mounted) setState(() => _loadingMessage = _loadingMessages[3]);
+      if (mounted) _updateLoadingMessage(3);
     });
+  }
+
+  void _updateLoadingMessage(int index) {
+    final lang = context.read<LanguageProvider>().code;
+    final messages = _loadingMessages[lang] ?? _loadingMessages['en']!;
+    setState(() => _loadingMessage = messages[index]);
   }
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize Language Service
-      final languageService = Provider.of<LanguageService>(context, listen: false);
-      await languageService.init();
-      
-      // Any additional initialization
-      await Future.delayed(const Duration(milliseconds: 500));
-      
+      await Future.delayed(const Duration(seconds: 6));
     } catch (e) {
       debugPrint("Startup Error: $e");
     }
@@ -137,6 +220,7 @@ class _StartupScreenState extends State<StartupScreen>
       animation: _controller,
       builder: (_, __) {
         final value = (_controller.value + delay) % 1;
+
         return Positioned(
           top: top + math.sin(value * 2 * math.pi) * 20,
           left: left + math.cos(value * 2 * math.pi) * 15,
@@ -155,10 +239,24 @@ class _StartupScreenState extends State<StartupScreen>
 
   @override
   Widget build(BuildContext context) {
+    final langProvider = context.watch<LanguageProvider>();
+    final isAmharic = langProvider.code == 'am';
+    final isOromo = langProvider.code == 'om';
+
+    String titleText = "CoffeeGuard";
+    String subtitleText = "Protecting every coffee leaf";
+
+    if (isAmharic) {
+      titleText = "ቡናጋርድ";
+      subtitleText = "እያንዳንዱን የቡና ቅጠል መጠበቅ";
+    } else if (isOromo) {
+      titleText = "BunaGuard";
+      subtitleText = "Buna tokkoo tokkoo eeguu";
+    }
+
     return Scaffold(
       body: Stack(
         children: [
-          /// BACKGROUND GRADIENT
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -173,73 +271,33 @@ class _StartupScreenState extends State<StartupScreen>
             ),
           ),
 
-          /// FLOATING LEAVES
           floatingLeaf(80, 30, 40, 0.1),
           floatingLeaf(160, 280, 55, 0.3),
           floatingLeaf(500, 40, 50, 0.5),
           floatingLeaf(620, 290, 38, 0.7),
           floatingLeaf(350, 170, 65, 0.9),
 
-          /// CENTER CONTENT
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                /// GLOW CIRCLE WITH PULSE ANIMATION
-                TweenAnimationBuilder(
-                  tween: Tween<double>(begin: 1.0, end: 1.1),
-                  duration: const Duration(seconds: 2),
-                  builder: (context, double scale, child) {
-                    return Transform.scale(
-                      scale: scale,
-                      child: Container(
-                        padding: const EdgeInsets.all(25),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.12),
-                              blurRadius: 25,
-                              spreadRadius: 6,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.eco,
-                          color: Colors.white,
-                          size: 70,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
+                const Icon(Icons.eco, color: Colors.white, size: 70),
                 const SizedBox(height: 28),
-
-                const Text(
-                  "CoffeeGuard",
-                  style: TextStyle(
+                Text(
+                  titleText,
+                  style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 30,
+                    fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+                    letterSpacing: 1.2,
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-                const Text(
-                  "Protecting every coffee leaf",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 15,
-                  ),
+                Text(
+                  subtitleText,
+                  style: const TextStyle(color: Colors.white70, fontSize: 16),
                 ),
-
                 const SizedBox(height: 35),
-
-                /// ANIMATED PROGRESS BAR
                 SizedBox(
                   width: 200,
                   child: ClipRRect(
@@ -251,10 +309,7 @@ class _StartupScreenState extends State<StartupScreen>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 18),
-
-                /// DYNAMIC LOADING MESSAGE
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 500),
                   child: Text(
@@ -264,31 +319,8 @@ class _StartupScreenState extends State<StartupScreen>
                       color: Colors.white70,
                       fontSize: 14,
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                
-                const SizedBox(height: 30),
-                
-                /// LANGUAGE INDICATOR (subtle)
-                Consumer<LanguageService>(
-                  builder: (context, lang, child) {
-                    String languageText = "";
-                    if (lang.isEnglish) languageText = "🌐 English";
-                    else if (lang.isAmharic) languageText = "🇪🇹 አማርኛ";
-                    else languageText = "🇪🇹 Oromoo";
-                    
-                    return AnimatedOpacity(
-                      opacity: 0.5,
-                      duration: const Duration(milliseconds: 300),
-                      child: Text(
-                        languageText,
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    );
-                  },
                 ),
               ],
             ),

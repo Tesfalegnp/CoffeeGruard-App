@@ -39,6 +39,10 @@ class RecommendationModel extends HiveObject {
   @HiveField(10)
   String? contentOm;
 
+  /// NEW: CATEGORY FIELD (added to match Supabase schema)
+  @HiveField(11)
+  String? category;
+
   RecommendationModel({
     required this.id,
     required this.diseaseLabel,
@@ -51,6 +55,7 @@ class RecommendationModel extends HiveObject {
     this.contentAm,
     this.titleOm,
     this.contentOm,
+    this.category,
   });
 
   factory RecommendationModel.fromJson(Map<String, dynamic> json) {
@@ -68,6 +73,7 @@ class RecommendationModel extends HiveObject {
       contentAm: json['content_am'],
       titleOm: json['title_om'],
       contentOm: json['content_om'],
+      category: json['category'],
     );
   }
 
@@ -84,6 +90,7 @@ class RecommendationModel extends HiveObject {
       'content_am': contentAm,
       'title_om': titleOm,
       'content_om': contentOm,
+      'category': category,
     };
   }
 

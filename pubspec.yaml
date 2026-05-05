@@ -10,12 +10,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  flutter_localizations:
+    sdk: flutter
   # iOS-style icons
   cupertino_icons: ^1.0.8
-
+  shimmer: ^3.0.0
   # Internationalization
-  intl: ^0.18.1
+  intl: ^0.20.2
   # Replace your existing lottie line with:
   lottie: ^3.3.2
   # Backend & Supabase

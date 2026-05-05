@@ -236,4 +236,107 @@ static Future<void> updateCurrentUser(UserModel updated) async {
     print("❌ updateCurrentUser error: $e");
   }
 }
+  /// =====================================================
+  /// ADD THESE METHODS AT THE END OF YOUR HIVE_SERVICE FILE
+  /// =====================================================
+
+  /// 📥 Get recommendation by disease label (case insensitive)
+  static RecommendationModel? getRecommendationByDiseaseLabel(String diseaseLabel) {
+    try {
+      final box = getRecommendationBox();
+      final normalizedInput = diseaseLabel.toLowerCase().trim();
+      
+      for (var rec in box.values) {
+        final recLabel = rec.diseaseLabel.toLowerCase().trim();
+        if (recLabel == normalizedInput) {
+          return rec;
+        }
+      }
+      
+      // Try partial match
+      for (var rec in box.values) {
+        final recLabel = rec.diseaseLabel.toLowerCase().trim();
+        if (normalizedInput.contains(recLabel) || recLabel.contains(normalizedInput)) {
+          return rec;
+        }
+      }
+      
+      return null;
+    } catch (e) {
+      print("❌ getRecommendationByDiseaseLabel error: $e");
+      return null;
+    }
+  }
+
+  /// 📥 Save single recommendation (add or update)
+  static Future<void> saveSingleRecommendation(RecommendationModel recommendation) async {
+    try {
+      final box = getRecommendationBox();
+      await box.put(recommendation.id, recommendation);
+      print("✅ Single recommendation saved: ${recommendation.diseaseLabel}");
+    } catch (e) {
+      print("❌ saveSingleRecommendation error: $e");
+    }
+  }
+
+  /// 📊 Get recommendations by category
+  static List<RecommendationModel> getRecommendationsByCategory(String category) {
+    try {
+      final box = getRecommendationBox();
+      return box.values.where((rec) => rec.category == category).toList();
+    } catch (e) {
+      print("❌ getRecommendationsByCategory error: $e");
+      return [];
+    }
+  }
+
+  /// 📊 Get recommendations by priority
+  static List<RecommendationModel> getRecommendationsByPriority(String priority) {
+    try {
+      final box = getRecommendationBox();
+      return box.values.where((rec) => rec.priority == priority).toList();
+    } catch (e) {
+      print("❌ getRecommendationsByPriority error: $e");
+      return [];
+    }
+  }
+
+  /// 🔍 Check if recommendation exists
+  static bool recommendationExists(String diseaseLabel, String severity) {
+    try {
+      final box = getRecommendationBox();
+      final normalizedDisease = diseaseLabel.toLowerCase().trim();
+      final normalizedSeverity = severity.toLowerCase().trim();
+      
+      for (var rec in box.values) {
+        if (rec.diseaseLabel.toLowerCase().trim() == normalizedDisease &&
+            rec.severity.toLowerCase().trim() == normalizedSeverity) {
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// 🗑️ Delete recommendation by ID
+  static Future<void> deleteRecommendation(String id) async {
+    try {
+      final box = getRecommendationBox();
+      await box.delete(id);
+      print("✅ Recommendation deleted: $id");
+    } catch (e) {
+      print("❌ deleteRecommendation error: $e");
+    }
+  }
+
+  /// 📊 Get recommendation count
+  static int getRecommendationCount() {
+    try {
+      return getRecommendationBox().length;
+    } catch (e) {
+      return 0;
+    }
+  }
 }

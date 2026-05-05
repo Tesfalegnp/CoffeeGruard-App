@@ -28,13 +28,14 @@ class RecommendationModelAdapter extends TypeAdapter<RecommendationModel> {
       contentAm: fields[8] as String?,
       titleOm: fields[9] as String?,
       contentOm: fields[10] as String?,
+      category: fields[11] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, RecommendationModel obj) {
     writer
-      ..writeByte(11)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -56,7 +57,9 @@ class RecommendationModelAdapter extends TypeAdapter<RecommendationModel> {
       ..writeByte(9)
       ..write(obj.titleOm)
       ..writeByte(10)
-      ..write(obj.contentOm);
+      ..write(obj.contentOm)
+      ..writeByte(11)
+      ..write(obj.category);
   }
 
   @override
