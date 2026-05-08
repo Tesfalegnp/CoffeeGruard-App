@@ -9,7 +9,8 @@ import 'detection_management_screen.dart';
 import 'system_settings_screen.dart';
 import 'review_audit_screen.dart';
 import 'admin_guide_screen.dart';
-import 'admin_profile_screen.dart'; // ✅ ADDED
+import 'admin_profile_screen.dart'; //
+import 'feedback_view_admin.dart';
 
 // Navigation targets
 import '../auth/login_screen.dart';
@@ -136,7 +137,9 @@ class _AdminDashboardState extends State<AdminDashboard>
                 _btn("Audit", Icons.verified, Colors.teal, () {
                   _nav(const ReviewAuditScreen());
                 }),
-
+                _btn("Feedback", Icons.feedback, Colors.green, () {
+                  _nav(const FeedbackViewAdmin());
+                }),
                 _btn("Guide", Icons.menu_book, Colors.green, () {
                   _nav(const AdminGuideScreen());
                 }),

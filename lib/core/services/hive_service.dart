@@ -194,6 +194,9 @@ class HiveService {
       print("❌ saveUserSession error: $e");
     }
   }
+    static Box getSessionBox() {
+          return Hive.box(sessionBox);
+        }
 
   /// 📥 Get current user
   static UserModel? getCurrentUser() {

@@ -26,9 +26,13 @@ dependencies:
 
   # Image & AI
   image_picker: ^1.2.1
+  device_info_plus: ^10.1.0
+  package_info_plus: ^6.0.0
+  path: ^1.9.0
   tflite_flutter: ^0.12.1
   image: ^4.7.2
-
+  uuid: ^4.4.0
+  
   # Offline storage
   hive: ^2.2.3
   hive_flutter: ^1.1.0
@@ -76,6 +80,7 @@ flutter:
     - assets/models/coffee_leaf_verification.tflite
     - assets/models/coffee_rust_model.tflite
     - assets/icons/app_icon.png
+    - assets/developers/
     - assets/animations/coffee_splash.json
     - .env
 

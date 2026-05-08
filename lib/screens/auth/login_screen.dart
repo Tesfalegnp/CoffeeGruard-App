@@ -8,6 +8,9 @@ import '../../providers/theme_provider.dart';
 import '../admin/admin_dashboard.dart';
 import '../expert/expert_dashboard.dart';
 import '../home/hero_home_screen.dart';
+import 'register_screen.dart';
+import 'forgot_password_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -661,7 +664,57 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 24),
+                                        const SizedBox(height: 15),
+
+                                            // Forgot Password
+                                            Align(
+                                              alignment: Alignment.centerRight,
+                                              child: TextButton(
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => const ForgotPasswordScreen(),
+                                                    ),
+                                                  );
+                                                },
+                                                child: const Text(
+                                                  "Forgot Password?",
+                                                  style: TextStyle(
+                                                    color: Colors.green,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(height: 10),
+
+                                            // Create Account
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: OutlinedButton.icon(
+                                                icon: const Icon(Icons.person_add),
+                                                label: const Text("Create Account"),
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: Colors.green,
+                                                  side: const BorderSide(color: Colors.green),
+                                                  padding: const EdgeInsets.symmetric(
+                                                    vertical: 15,
+                                                  ),
+                                                ),
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => const RegisterScreen(),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+
+                                            const SizedBox(height: 24),
                                         // Demo Credentials Info
                                         Container(
                                           padding: const EdgeInsets.all(14),

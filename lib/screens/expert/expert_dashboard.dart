@@ -11,6 +11,7 @@ import 'image_gallery_screen.dart';
 import 'expert_settings_screen.dart';
 import 'expert_guide_screen.dart';
 import 'expert_profile_screen.dart';
+import 'feedback_view.dart';
 import '../auth/login_screen.dart';
 
 class ExpertDashboard extends StatefulWidget {
@@ -144,7 +145,14 @@ class _ExpertDashboardState extends State<ExpertDashboard>
                               MaterialPageRoute(builder: (_) => const ExpertQueueScreen()))
                               .then((_) => _loadDetections());
                         }),
-
+                        _btn("Feedback", Icons.feedback, Colors.deepPurple, () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const FeedbackViewScreen(),
+                                  ),
+                                );
+                              }),
                         _btn("Analytics", Icons.bar_chart, Colors.purple, () {
                           Navigator.push(context,
                               MaterialPageRoute(builder: (_) => const AnalyticsScreen()));

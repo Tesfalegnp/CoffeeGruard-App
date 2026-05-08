@@ -15,6 +15,7 @@ import '../../core/services/hive_service.dart';
 import '../../models/user_model.dart';
 import '../../providers/language_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../public/daily_tips_screen.dart';
 
 import '../detection/history_screen.dart';
 
@@ -368,10 +369,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
     return Scaffold(
       backgroundColor: bg,
 
-      drawer:
-          RoleDrawer(
-            currentUser: currentUser,
-          ),
+      drawer: const RoleDrawer(),
 
       appBar: AppBar(
         elevation: 0,
@@ -854,9 +852,9 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
         ),
         label: Text(
           tr(
-            "History",
-            "ታሪክ",
-            "Seenaa",
+            "News",
+            "ማስታወቂያ",
+            "beeksisa",
             code,
           ),
         ),
@@ -866,7 +864,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
             MaterialPageRoute(
               builder:
                   (_) =>
-                      const HistoryScreen(),
+                      const DailyTipsScreen(),
             ),
           );
         },

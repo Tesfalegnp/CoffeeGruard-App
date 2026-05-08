@@ -211,7 +211,7 @@ class SyncService {
   }
 
   /// =====================================================
-  /// 🔄 REFRESH QUEUE
+  /// REFRESH QUEUE
   /// =====================================================
   Future<List<DetectionResultModel>> refreshExpertQueue() async {
     return await pullExpertDetections();
@@ -224,14 +224,12 @@ Future<void> syncUserProfile() async {
     final user = HiveService.getCurrentUser();
     if (user == null) return;
 
-    final success = await supabaseService.updateUserProfile(
-      user.id,
-      {
-        "full_name": user.fullName,
-        "phone": user.phone,
-        "avatar_url": user.avatarUrl,
-      },
-    );
+   final success = await supabaseService.updateUserProfile(
+                id: user.id,
+                fullName: user.fullName,
+                phone: user.phone,
+                avatarUrl: user.avatarUrl,
+              );
 
     if (success) {
       print("✅ Profile synced to server");

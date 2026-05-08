@@ -116,8 +116,13 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
       };
 
       // 2. CLOUD UPDATE FIRST
-      final success =
-          await _supabase.updateUserProfile(user!.id, updatedData);
+     final success = await _supabase.updateUserProfile(
+                          id: user!.id,
+                          fullName: nameController.text,
+                          phone: phoneController.text,
+                          farmLocation: locationController.text,
+                          avatarUrl: avatarUrl,
+                        );
 
       if (success) {
         user!

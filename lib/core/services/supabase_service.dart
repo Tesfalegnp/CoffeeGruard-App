@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart'; 
+import '../../models/user_model.dart'; 
 
 class SupabaseService {
   final client = Supabase.instance.client;
@@ -40,6 +42,27 @@ class SupabaseService {
       return false;
     }
   }
+
+      // ============================================
+      // GET USER PROFILE BY ID
+      // ============================================
+
+      Future<UserModel?> getUserById(String id) async {
+        try {
+          final res = await client
+              .from('users')
+              .select()
+              .eq('id', id)
+              .maybeSingle();
+
+          if (res == null) return null;
+
+          return UserModel.fromJson(res);
+        } catch (e) {
+          print("GET USER ERROR: $e");
+          return null;
+        }
+      }
 
   // ===============================
   // 📥 FETCH ALL DETECTIONS
@@ -333,39 +356,166 @@ class SupabaseService {
 // 👤 ADMIN PROFILE (ADD ONLY 🔥)
 // =====================================================
 
-Future<Map<String, dynamic>?> fetchUserById(String id) async {
-  try {
-    final response = await client
-        .from('users')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
+          Future<Map<String, dynamic>?> fetchUserById(String id) async {
+            try {
+              final response = await client
+                  .from('users')
+                  .select()
+                  .eq('id', id)
+                  .maybeSingle();
 
-    return response;
-  } catch (e) {
-    print("❌ fetchUserById error: $e");
-    return null;
-  }
-}
+              return response;
+            } catch (e) {
+              print("❌ fetchUserById error: $e");
+              return null;
+            }
+          }
 
-Future<bool> updateUserProfile(
-  String id,
-  Map<String, dynamic> data,
-) async {
-  try {
-    final response = await client
-        .from('users')
-        .update({
-          ...data,
-          "updated_at": DateTime.now().toIso8601String(),
-        })
-        .eq('id', id)
-        .select();
+                Future<bool> updateUserProfile({
+                  required String id,
+                  String? fullName,
+                  String? phone,
+                  String? avatarUrl,
+                  String? farmLocation,
+                  double? farmSize,
+                  List<String>? crops,
+                  String? expertise,
+                  int? yearsExperience,
+                  String? country,
+                  String? city,
+                  String? bio,
+                }) async {
+                  try {
+                    final response = await client
+                        .from('users')
+                        .update({
+                          "full_name": fullName,
+                          "phone": phone,
+                          "avatar_url": avatarUrl,
+                          "farm_location": farmLocation,
+                          "farm_size": farmSize,
+                          "crops": crops,
+                          "expertise": expertise,
+                          "years_experience": yearsExperience,
+                          "country": country,
+                          "city": city,
+                          "bio": bio,
+                          "updated_at": DateTime.now().toIso8601String(),
+                        })
+                        .eq('id', id)
+                        .select();
 
-    return response.isNotEmpty;
-  } catch (e) {
-    print("❌ updateUserProfile error: $e");
-    return false;
-  }
-}
+                    return response.isNotEmpty;
+                  } catch (e) {
+                    print("PROFILE UPDATE ERROR: $e");
+                    return false;
+                  }
+                }
+         // ==========================================
+          // 👤 REGISTER USER (MANUAL TABLE REGISTER)
+          // ==========================================
+                  Future<bool> registerUser({
+                    required String fullName,
+                    required String email,
+                    required String password,
+                    String role = "farmer",
+                  }) async {
+                    try {
+                      final cleanEmail = email.trim().toLowerCase();
+
+                      // =====================================
+                      // 1. CHECK EXISTING EMAIL
+                      // =====================================
+                      final existingUser = await client
+                          .from('users')
+                          .select('email')
+                          .eq('email', cleanEmail)
+                          .maybeSingle();
+
+                      if (existingUser != null) {
+                        print("⚠️ Email already registered");
+                        return false;
+                      }
+
+                      // =====================================
+                      // 2. GENERATE UUID (VERY IMPORTANT)
+                      // =====================================
+                      final userId = const Uuid().v4();
+
+                      // =====================================
+                      // 3. INSERT USER
+                      // =====================================
+                      await client.from('users').insert({
+                        "id": userId,
+                        "full_name": fullName.trim(),
+                        "email": cleanEmail,
+                        "password": password.trim(), // your requirement
+                        "role": role,
+                        "is_active": true,
+                        "is_online": false,
+                        "verified": false,
+                        "login_count": 0,
+                        "rating": 0,
+                        "total_reviews": 0,
+                        "created_at": DateTime.now().toIso8601String(),
+                        "updated_at": DateTime.now().toIso8601String(),
+                      });
+
+                      print("✅ User registered successfully");
+                      return true;
+                    } catch (e) {
+                      print("❌ REGISTER ERROR: $e");
+                      return false;
+                    }
+                  }
+                  // =======================================================
+              // VERIFY USER BEFORE RESET
+                    // =======================================================
+
+                    Future<bool> verifyUserForReset({
+                      required String fullName,
+                      required String email,
+                    }) async {
+                      try {
+                        final result = await client
+                            .from('users')
+                            .select()
+                            .eq('email', email.trim().toLowerCase())
+                            .eq('full_name', fullName.trim())
+                            .maybeSingle();
+
+                        return result != null;
+                      } catch (e) {
+                        print("VERIFY ERROR: $e");
+                        return false;
+                      }
+                    }
+
+                    // =======================================================
+                    // RESET PASSWORD
+                    // =======================================================
+
+                    Future<bool> resetPasswordDirectly({
+                      required String email,
+                      required String newPassword,
+                    }) async {
+                      try {
+                        await client
+                            .from('users')
+                            .update({
+                              "password": newPassword.trim(),
+                              "updated_at":
+                                  DateTime.now().toIso8601String(),
+                            })
+                            .eq(
+                              'email',
+                              email.trim().toLowerCase(),
+                            );
+
+                        return true;
+                      } catch (e) {
+                        print("RESET ERROR: $e");
+                        return false;
+                      }
+                    }
 }
