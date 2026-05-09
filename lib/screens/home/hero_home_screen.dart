@@ -17,6 +17,7 @@ import '../../providers/language_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../public/daily_tips_screen.dart';
 
+import '../chat/assistant_chat_screen.dart';
 import '../detection/history_screen.dart';
 
 import 'widgets/result_card.dart';
@@ -313,6 +314,67 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
       displayedText = "";
     });
   }
+
+void _openHelperPanel() {
+  showGeneralDialog(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: "Close",
+    barrierColor: Colors.black54,
+    transitionDuration:
+        const Duration(milliseconds: 350),
+
+    pageBuilder: (_, __, ___) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Material(
+          color: Colors.transparent,
+
+          child: Container(
+            width:
+                MediaQuery.of(context)
+                        .size
+                        .width *
+                    0.82,
+
+            height:
+                MediaQuery.of(context)
+                    .size
+                    .height,
+
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .scaffoldBackgroundColor,
+
+              borderRadius:
+                  const BorderRadius.only(
+                topLeft:
+                    Radius.circular(26),
+                bottomLeft:
+                    Radius.circular(26),
+              ),
+            ),
+
+            child:
+                const AssistantChatScreen(),
+          ),
+        ),
+      );
+    },
+
+    transitionBuilder:
+        (_, animation, __, child) {
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      );
+    },
+  );
+}
+
 
   // =====================================================
   // DISPOSE
@@ -843,31 +905,67 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
         ),
       ),
 
-      floatingActionButton:
-          FloatingActionButton.extended(
-        backgroundColor:
-            Colors.green.shade700,
-        icon: const Icon(
-          Icons.history,
-        ),
-        label: Text(
-          tr(
-            "News",
-            "ማስታወቂያ",
-            "beeksisa",
-            code,
-          ),
-        ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder:
-                  (_) =>
-                      const DailyTipsScreen(),
+     floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          // HELPER BUTTON
+          TweenAnimationBuilder(
+            tween: Tween(begin: 0.9, end: 1.05),
+            duration:
+                const Duration(seconds: 1),
+            curve: Curves.easeInOut,
+            builder:
+                (_, value, child) =>
+                    Transform.scale(
+              scale: value as double,
+              child: child,
             ),
-          );
-        },
+
+            child: FloatingActionButton(
+              heroTag: "helper",
+              backgroundColor:
+                  Colors.orange.shade700,
+
+              child: const Icon(
+                Icons.smart_toy,
+                color: Colors.white,
+              ),
+
+              onPressed: _openHelperPanel,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // NEWS BUTTON
+          FloatingActionButton.extended(
+            heroTag: "news",
+            backgroundColor:
+                Colors.green.shade700,
+
+            icon: const Icon(Icons.history),
+
+            label: Text(
+              tr(
+                "News",
+                "ማስታወቂያ",
+                "beeksisa",
+                code,
+              ),
+            ),
+
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const DailyTipsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
