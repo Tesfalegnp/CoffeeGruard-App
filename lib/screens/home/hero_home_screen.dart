@@ -65,6 +65,8 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
 
   UserModel? currentUser;
 
+  bool _isOnline = false;
+  StreamSubscription<ConnectivityResult>? _networkSubscription;  
   // =====================================================
   // INIT
   // =====================================================
@@ -77,6 +79,7 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
     detectionService.init();
 
     _initTTS();
+    _initNetworkStatus();
     _preloadRecommendations();
 
     _pulseController = AnimationController(
@@ -125,6 +128,30 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
     await tts.setSpeechRate(0.45);
     await tts.setPitch(1.0);
   }
+
+Future<void> _initNetworkStatus() async {
+  final result =
+      await Connectivity().checkConnectivity();
+
+  if (mounted) {
+    setState(() {
+      _isOnline =
+          result != ConnectivityResult.none;
+    });
+  }
+
+  _networkSubscription =
+      Connectivity()
+          .onConnectivityChanged
+          .listen((result) {
+    if (!mounted) return;
+
+    setState(() {
+      _isOnline =
+          result != ConnectivityResult.none;
+    });
+  });
+}
 
   // =====================================================
   // LANGUAGE TEXTS
@@ -201,9 +228,9 @@ class _HeroHomeScreenState extends State<HeroHomeScreen>
       setState(() {
         isProcessing = false;
         disease = tr(
-          "Detection Failed",
-          "ምርመራ አልተሳካም",
-          "Qorannoon hin milkoofne",
+          "Sorry this is not a coffee leaf",
+          "ይቅርታ ይህ የቡና ፍሬ አይደለም",
+          "dhiifama kun baala bunaa miti",
           code,
         );
 
@@ -321,54 +348,50 @@ void _openHelperPanel() {
     barrierDismissible: true,
     barrierLabel: "Close",
     barrierColor: Colors.black54,
-    transitionDuration:
-        const Duration(milliseconds: 350),
-
+    transitionDuration: const Duration(milliseconds: 400),
     pageBuilder: (_, __, ___) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: Material(
-          color: Colors.transparent,
-
-          child: Container(
-            width:
-                MediaQuery.of(context)
-                        .size
-                        .width *
-                    0.82,
-
-            height:
-                MediaQuery.of(context)
-                    .size
-                    .height,
-
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .scaffoldBackgroundColor,
-
-              borderRadius:
-                  const BorderRadius.only(
-                topLeft:
-                    Radius.circular(26),
-                bottomLeft:
-                    Radius.circular(26),
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Align(
+            alignment: Alignment.centerRight,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: MediaQuery.of(context).size.width * 0.88,
+                height: MediaQuery.of(context).size.height * 0.96,
+                margin: EdgeInsets.only(
+                  top: 12,
+                  bottom: 12,
+                  right: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(-5, 0),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: const AssistantChatScreen(),
               ),
             ),
-
-            child:
-                const AssistantChatScreen(),
-          ),
-        ),
+          );
+        },
       );
     },
-
-    transitionBuilder:
-        (_, animation, __, child) {
+    transitionBuilder: (_, animation, __, child) {
       return SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(1, 0),
           end: Offset.zero,
-        ).animate(animation),
+        ).animate(CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        )),
         child: child,
       );
     },
@@ -391,7 +414,7 @@ void _openHelperPanel() {
     _fadeController.dispose();
 
     tts.stop();
-
+    _networkSubscription?.cancel();
     super.dispose();
   }
 
@@ -439,34 +462,68 @@ void _openHelperPanel() {
         backgroundColor:
             Colors.green.shade700,
 
-        title: Column(
-          children: [
-            Text(
-              tr(
-                "CoffeeGuard",
-                "ቡናጋርድ",
-                "BunaGuard",
-                code,
-              ),
-              style: const TextStyle(
-                fontWeight:
-                    FontWeight.bold,
-              ),
-            ),
-            Text(
-              tr(
-                "Protect coffee plants",
-                "የቡና ተክል ጥበቃ",
-                "Buna eegi",
-                code,
-              ),
-              style:
-                  const TextStyle(
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
+                  title: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      tr(
+                        "CoffeeGuard",
+                        "ቡናጋርድ",
+                        "BunaGuard",
+                        code,
+                      ),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    AnimatedSwitcher(
+                      duration:
+                          const Duration(
+                              milliseconds: 500),
+                      transitionBuilder:
+                          (child, animation) =>
+                              FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin:
+                                const Offset(0, .4),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+
+                      child: Text(
+                        _isOnline
+                            ? tr(
+                                "☁️ Cloud AI Online",
+                                "☁️ ክላውድ AI በመስመር ላይ",
+                                "☁️ Cloud AI Online",
+                                code,
+                              )
+                            : tr(
+                                "📱 Offline Local AI",
+                                "📱 ከመስመር ውጭ AI",
+                                "📱 Offline Local AI",
+                                code,
+                              ),
+
+                        key: ValueKey(_isOnline),
+
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _isOnline
+                              ? Colors.greenAccent
+                              : Colors.orangeAccent,
+                          fontWeight:
+                              FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
 
         actions: const [
           ThemeSelector(),

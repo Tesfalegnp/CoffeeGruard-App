@@ -2,142 +2,122 @@ import 'dart:io';
 
 import '../../ml/coffee_detector.dart';
 import '../../models/detection_result_model.dart';
-import '../../models/recommendation_model.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
 
+import 'cloud/cloud_detection_service.dart';
+import 'cloud/network_service.dart';
+
 class DetectionService {
   final CoffeeDetector _detector = CoffeeDetector();
-  final SupabaseService _supabaseService = SupabaseService();
+  final CloudDetectionService _cloud =
+      CloudDetectionService();
+
+  final SupabaseService _supabaseService =
+      SupabaseService();
 
   bool _initialized = false;
 
-  /// Initialize model
   Future<void> init() async {
     if (_initialized) return;
 
     await _detector.loadModels();
-    _initialized = true;
 
-    print("☕ CoffeeGuard Initialized");
+    _initialized = true;
   }
 
-  /// Run detection pipeline
-  Future<Map<String, dynamic>> runDetection(File image) async {
+  Future<Map<String, dynamic>> runDetection(
+      File image) async {
     try {
-      print("🧠 Running model...");
+      Map<String, dynamic> result;
 
-      final result = await _detector.detect(image);
+      final online =
+          await NetworkService.isOnline();
 
-      /// ❌ Stage 1 failed
-      if (result["success"] == false) {
-        print("Sorry it's Not a coffee leaf, Please try again with a clear image of a coffee leaf");
+      /// ===============================
+      /// CLOUD FIRST
+      /// ===============================
+      if (online) {
+        print("☁️ Using Cloud AI...");
+        result = await _cloud.detect(image);
 
-        return {
-          "success": false,
-          "message": result["message"]
-        };
+        if (result["success"] == false) {
+          print("⚠️ Cloud failed → Local AI");
+          result =
+              await _detector.detect(image);
+        }
       }
 
-      /// ✅ Normalize disease text
-      final diseaseRaw = result["disease"];
-      final disease = diseaseRaw.toString().trim();
+      /// ===============================
+      /// OFFLINE
+      /// ===============================
+      else {
+        print("📱 Offline Local AI...");
+        result =
+            await _detector.detect(image);
+      }
+
+      if (result["success"] == false) {
+        return result;
+      }
+
+      final disease =
+          result["disease"].toString();
 
       final confidence =
-          double.parse(result["confidence"].toString()) / 100;
+          double.parse(
+            result["confidence"].toString(),
+          ) /
+              100;
 
-      print("✅ Coffee leaf detected");
-      print("🦠 Disease: $disease ($confidence)");
+      String recommendation =
+          "No recommendation";
 
-      /// =====================================================
-      /// 🧠 OFFLINE-FIRST RECOMMENDATION LOGIC
-      /// =====================================================
-
-      String recommendationText = "No recommendation available";
-
-      /// ⚠️ TEMP: default severity
-      String severity = "medium";
-        RecommendationModel? recommendationModel;
       try {
-        /// 1️⃣ Try LOCAL (Hive) FIRST
-        final RecommendationModel? localRec =
-            HiveService.getRecommendation(disease, severity);
+        final rec =
+            await _supabaseService
+                .getRecommendationByDisease(
+                    disease);
 
-        if (localRec != null) {
-          print("📦 Using LOCAL recommendation");
-
-          recommendationText = localRec.content;
-          recommendationModel = localRec;
-        } else {
-          print("🌐 No local recommendation, fetching ONLINE...");
-
-          /// 2️⃣ FALLBACK → SUPABASE
-          final rec =
-              await _supabaseService.getRecommendationByDisease(disease);
-
-          if (rec != null && rec["content"] != null) {
-            recommendationText = rec["content"];
-
-            /// 🆕 CREATE MODEL FROM API
-            recommendationModel = RecommendationModel(
-              id: rec["id"],
-              diseaseLabel: rec["disease_label"],
-              severity: rec["severity"],
-              title: rec["title"],
-              content: rec["content"],
-              titleAm: rec["title_am"],
-              contentAm: rec["content_am"],
-              priority: rec["priority"] ?? "medium",
-              updatedAt: rec["updated_at"] != null
-                  ? DateTime.parse(rec["updated_at"])
-                  : null,
-            );
-          }
+        if (rec != null) {
+          recommendation =
+              rec["content"] ??
+                  "No recommendation";
         }
-      } catch (e) {
-        print("⚠️ Recommendation error: $e");
-      }
+      } catch (_) {}
 
-      /// =====================================================
-      /// 💾 SAVE IMAGE LOCALLY
-      /// =====================================================
-      final savedPath = await HiveService.saveImageToLocal(image);
+      final savedPath =
+          await HiveService.saveImageToLocal(
+              image);
 
-      /// =====================================================
-      /// 📦 CREATE DETECTION OBJECT
-      /// =====================================================
-      final detection = DetectionResultModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+      final detection =
+          DetectionResultModel(
+        id: DateTime.now()
+            .millisecondsSinceEpoch
+            .toString(),
         imageLocalPath: savedPath,
         isCoffeeLeaf: true,
         leafConfidence: 1.0,
         diseaseLabel: disease,
         diseaseConfidence: confidence,
-        recommendation: recommendationText,
+        recommendation: recommendation,
         createdAt: DateTime.now(),
         isSynced: false,
       );
 
-      /// =====================================================
-      /// 💾 SAVE TO HIVE + AUTO SYNC
-      /// =====================================================
-      print("💾 Saving detection...");
-      await HiveService.saveDetection(detection);
+      await HiveService.saveDetection(
+          detection);
 
       return {
         "success": true,
         "disease": disease,
         "diseaseConfidence": confidence,
-        "recommendation": recommendationText,
-        "recommendationModel": recommendationModel,
+        "recommendation": recommendation,
       };
-
     } catch (e) {
-      print("🔥 Detection Error: $e");
-
       return {
         "success": false,
-        "message": "Detection failed"
+        "message": "Detection failed $e"
       };
     }
   }
